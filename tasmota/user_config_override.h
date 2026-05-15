@@ -2,5 +2,6 @@
 #define _USER_CONFIG_OVERRIDE_H_
 
 #define USE_TCP_BRIDGE
+#define USE_ETHERNET
 
 #endif
