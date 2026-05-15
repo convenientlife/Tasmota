@@ -847,3 +847,8 @@
 
 #endif  // ESP32
 #endif  // _TASMOTA_CONFIGURATIONS_ESP32_H_
+
+// ZB-GW03: Ensure TCP Bridge is available with FIRMWARE_ZBBRIDGE on ESP32
+#ifdef FIRMWARE_ZBBRIDGE
+  #define USE_TCP_BRIDGE
+#endif
