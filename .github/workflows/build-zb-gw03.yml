@@ -19,14 +19,14 @@ jobs:
       - name: Install PlatformIO
         run: pip install platformio
 
-      - name: Build tasmota32
-        run: platformio run -e tasmota32
+      - name: Build tasmota32-zb-gw03
+        run: platformio run -e tasmota32-zb-gw03
 
       - name: Upload firmware artifact
         uses: actions/upload-artifact@v4
         with:
-          name: tasmota32-tcpbridge
+          name: tasmota32-zb-gw03
           path: |
-            build_output/firmware/tasmota32.bin
-            build_output/firmware/tasmota32.factory.bin
+            build_output/firmware/tasmota32-zb-gw03.bin
+            build_output/firmware/tasmota32-zb-gw03.factory.bin
           retention-days: 7
