@@ -35,12 +35,16 @@ jobs:
           #endif
           EOF
 
-      - name: Force-enable TCP Bridge directly in xdrv_41
+      - name: Force-enable TCP Bridge globally
         run: |
           f=$(find tasmota -name 'xdrv_41_tcp_bridge.ino')
-          echo "Patching: $f"
           sed -i '0,/^#ifdef USE_TCP_BRIDGE/s//#define USE_TCP_BRIDGE\n#ifdef USE_TCP_BRIDGE/' "$f"
-          grep -n "USE_TCP_BRIDGE" "$f" | head -5
+          echo "" >> tasmota/include/tasmota_configurations.h
+          echo "#define USE_TCP_BRIDGE" >> tasmota/include/tasmota_configurations.h
+          echo "=== tail of tasmota_configurations.h ==="
+          tail -5 tasmota/include/tasmota_configurations.h
+          echo "=== xdrv_41 head ==="
+          grep -n "USE_TCP_BRIDGE" "$f" | head -3
 
       - name: Set up Python
         uses: actions/setup-python@v5
