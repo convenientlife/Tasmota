@@ -15,7 +15,7 @@ jobs:
           repository: arendst/Tasmota
           ref: v14.6.0
 
-      - name: Inject ZB-GW03 config (EZSP + TCP Bridge + Ethernet)
+      - name: Inject ZB-GW03 config (EZSP + Ethernet)
         run: |
           cat > tasmota/user_config_override.h << 'EOF'
           #ifndef _USER_CONFIG_OVERRIDE_H_
@@ -34,6 +34,13 @@ jobs:
 
           #endif
           EOF
+
+      - name: Force-enable TCP Bridge directly in xdrv_41
+        run: |
+          f=$(find tasmota -name 'xdrv_41_tcp_bridge.ino')
+          echo "Patching: $f"
+          sed -i '0,/^#ifdef USE_TCP_BRIDGE/s//#define USE_TCP_BRIDGE\n#ifdef USE_TCP_BRIDGE/' "$f"
+          grep -n "USE_TCP_BRIDGE" "$f" | head -5
 
       - name: Set up Python
         uses: actions/setup-python@v5
