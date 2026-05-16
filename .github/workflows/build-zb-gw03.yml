@@ -21,12 +21,9 @@ jobs:
           #ifndef _USER_CONFIG_OVERRIDE_H_
           #define _USER_CONFIG_OVERRIDE_H_
 
-          #define USE_ZIGBEE
-          #undef  USE_ZIGBEE_ZNP
           #define USE_ZIGBEE_EZSP
           #define USE_ZIGBEE_EEPROM
           #define USE_ZIGBEE_CHANNEL 11
-          #define USE_TCP_BRIDGE
           #define USE_ETHERNET
           #define ETH_TYPE 0
           #define ETH_CLKMODE 3
@@ -34,17 +31,6 @@ jobs:
 
           #endif
           EOF
-
-      - name: Force-enable TCP Bridge globally
-        run: |
-          f=$(find tasmota -name 'xdrv_41_tcp_bridge.ino')
-          sed -i '0,/^#ifdef USE_TCP_BRIDGE/s//#define USE_TCP_BRIDGE\n#ifdef USE_TCP_BRIDGE/' "$f"
-          echo "" >> tasmota/include/tasmota_configurations.h
-          echo "#define USE_TCP_BRIDGE" >> tasmota/include/tasmota_configurations.h
-          echo "=== tail of tasmota_configurations.h ==="
-          tail -5 tasmota/include/tasmota_configurations.h
-          echo "=== xdrv_41 head ==="
-          grep -n "USE_TCP_BRIDGE" "$f" | head -3
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -54,14 +40,14 @@ jobs:
       - name: Install PlatformIO
         run: pip install platformio
 
-      - name: Build tasmota32
-        run: platformio run -e tasmota32
+      - name: Build tasmota32-zbbrdgpro
+        run: platformio run -e tasmota32-zbbrdgpro
 
       - name: Upload firmware artifact
         uses: actions/upload-artifact@v4
         with:
           name: tasmota32-zb-gw03
           path: |
-            build_output/firmware/tasmota32.bin
-            build_output/firmware/tasmota32.factory.bin
+            build_output/firmware/tasmota32-zbbrdgpro.bin
+            build_output/firmware/tasmota32-zbbrdgpro.factory.bin
           retention-days: 7
