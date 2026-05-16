@@ -17,6 +17,12 @@
   along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+*/
+
+#ifndef USE_TCP_BRIDGE
+#define USE_TCP_BRIDGE
+#endif
+
 #ifdef USE_TCP_BRIDGE
 
 #define XDRV_41                    41
