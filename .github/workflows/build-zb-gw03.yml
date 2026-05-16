@@ -15,18 +15,25 @@ jobs:
           repository: arendst/Tasmota
           ref: v14.6.0
 
-      - name: Inject ZB-GW03 config (EZSP + Ethernet)
+      - name: Switch Zigbee protocol ZNP -> EZSP in source
+        run: |
+          sed -i 's|^[[:space:]]*#define USE_ZIGBEE_ZNP|//&|' tasmota/my_user_config.h
+          sed -i 's|^[[:space:]]*//[[:space:]]*#define USE_ZIGBEE_EZSP|#define USE_ZIGBEE_EZSP|' tasmota/my_user_config.h
+          echo "=== Zigbee protocol lines ==="
+          grep -n "USE_ZIGBEE_ZNP\|USE_ZIGBEE_EZSP" tasmota/my_user_config.h | head -10
+
+      - name: Inject ZB-GW03 config (Ethernet)
         run: |
           cat > tasmota/user_config_override.h << 'EOF'
           #ifndef _USER_CONFIG_OVERRIDE_H_
           #define _USER_CONFIG_OVERRIDE_H_
 
-          #define USE_ZIGBEE_EZSP
           #define USE_ZIGBEE_EEPROM
           #define USE_ZIGBEE_CHANNEL 11
           #define USE_ETHERNET
           #define ETH_TYPE 0
           #define ETH_CLKMODE 3
+          #undef  ETH_ADDRESS
           #define ETH_ADDRESS 1
 
           #endif
