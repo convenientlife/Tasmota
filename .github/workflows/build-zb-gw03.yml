@@ -9,7 +9,31 @@ jobs:
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout stable Tasmota v14.6.0
+        uses: actions/checkout@v4
+        with:
+          repository: arendst/Tasmota
+          ref: v14.6.0
+
+      - name: Inject ZB-GW03 config (EZSP + TCP Bridge + Ethernet)
+        run: |
+          cat > tasmota/user_config_override.h << 'EOF'
+          #ifndef _USER_CONFIG_OVERRIDE_H_
+          #define _USER_CONFIG_OVERRIDE_H_
+
+          #define USE_ZIGBEE
+          #undef  USE_ZIGBEE_ZNP
+          #define USE_ZIGBEE_EZSP
+          #define USE_ZIGBEE_EEPROM
+          #define USE_ZIGBEE_CHANNEL 11
+          #define USE_TCP_BRIDGE
+          #define USE_ETHERNET
+          #define ETH_TYPE 0
+          #define ETH_CLKMODE 3
+          #define ETH_ADDRESS 1
+
+          #endif
+          EOF
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -19,14 +43,14 @@ jobs:
       - name: Install PlatformIO
         run: pip install platformio
 
-      - name: Build tasmota32-zb-gw03
-        run: platformio run -e tasmota32-zb-gw03
+      - name: Build tasmota32
+        run: platformio run -e tasmota32
 
       - name: Upload firmware artifact
         uses: actions/upload-artifact@v4
         with:
           name: tasmota32-zb-gw03
           path: |
-            build_output/firmware/tasmota32-zb-gw03.bin
-            build_output/firmware/tasmota32-zb-gw03.factory.bin
+            build_output/firmware/tasmota32.bin
+            build_output/firmware/tasmota32.factory.bin
           retention-days: 7
