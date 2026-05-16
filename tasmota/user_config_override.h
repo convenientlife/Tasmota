@@ -1,7 +1,12 @@
 #ifndef _USER_CONFIG_OVERRIDE_H_
 #define _USER_CONFIG_OVERRIDE_H_
 
-#define USE_TCP_BRIDGE
 #define USE_ETHERNET
+#define USE_TCP_BRIDGE
+
+#define USE_ZIGBEE
+#undef  USE_ZIGBEE_ZNP
+#define USE_ZIGBEE_EZSP
+#define USE_ZIGBEE_EEPROM
 
 #endif
