@@ -27,6 +27,8 @@
 
 #define XDRV_41                    41
 
+#include <WiFi.h>
+
 #ifndef TCP_BRIDGE_CONNECTIONS
 #define TCP_BRIDGE_CONNECTIONS 2    // number of maximum parallel connections
 #endif
