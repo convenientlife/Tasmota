@@ -13,15 +13,11 @@ jobs:
           repository: arendst/Tasmota
           ref: v14.6.0
 
-      - name: Get ZBBRDGPRO section and undef context
+      - name: Get FIRMWARE_BLUETOOTH full section
         run: |
-          echo "====== ZBBRDGPRO 섹션 (491~540) ======"
-          sed -n '491,540p' tasmota/include/tasmota_configurations_ESP32.h
+          echo "====== FIRMWARE_BLUETOOTH 섹션 전체 (251~280) ======"
+          sed -n '251,280p' tasmota/include/tasmota_configurations_ESP32.h
 
-          echo "====== configurations.h 930~950 (undef line 940 주변) ======"
-          sed -n '930,950p' tasmota/include/tasmota_configurations.h
-
-          echo "====== user_config_override.h include 위치 ======"
-          grep -n "user_config_override\|USER_CONFIG_OVERRIDE" tasmota/my_user_config.h | tail -5
-          grep -rn "user_config_override\|USER_CONFIG_OVERRIDE" tasmota/tasmota.h 2>/dev/null || true
-          grep -rn "user_config_override\|USER_CONFIG_OVERRIDE" tasmota/include/ | head -10
+          echo "====== USE_MI_ESP32 undef 위치 ======"
+          grep -n "USE_MI_ESP32" tasmota/include/tasmota_configurations_ESP32.h
+          grep -n "USE_MI_ESP32" tasmota/include/tasmota_configurations.h | head -20
