@@ -15,39 +15,38 @@ jobs:
 
       - name: 1. Include order of config headers
         run: |
-          echo "=== tasmota_configurations.h 가 ESP32.h 를 include 하는가? ==="
-          grep -n "tasmota_configurations_ESP32\|tasmota_configurations.h" tasmota/include/tasmota_configurations.h
-          echo ""
-          echo "=== 두 헤더가 어디서 include 되는가 (포함 순서) ==="
-          grep -rn "tasmota_configurations.h\|tasmota_configurations_ESP32.h" tasmota/*.ino tasmota/include/tasmota_post.h tasmota/include/tasmota.h 2>/dev/null | head -20
+          echo "=== configurations.h 가 ESP32.h 를 include 하는가 ==="
+          grep -n "tasmota_configurations_ESP32" tasmota/include/tasmota_configurations.h || true
+          echo "=== 두 헤더 include 위치 ==="
+          grep -rn "tasmota_configurations.h\|tasmota_configurations_ESP32.h" tasmota/tasmota.h tasmota/include/tasmota_post.h 2>/dev/null || true
+          grep -rln "include.*tasmota_configurations" tasmota/ 2>/dev/null | head -10 || true
 
       - name: 2. ALL USE_EQ3_ESP32 locations
         run: |
-          echo "=== ESP32.h 의 USE_EQ3_ESP32 ==="
-          grep -n "USE_EQ3_ESP32" tasmota/include/tasmota_configurations_ESP32.h
-          echo "=== configurations.h 의 USE_EQ3_ESP32 ==="
-          grep -n "USE_EQ3_ESP32" tasmota/include/tasmota_configurations.h
+          echo "=== ESP32.h ==="
+          grep -n "USE_EQ3_ESP32" tasmota/include/tasmota_configurations_ESP32.h || true
+          echo "=== configurations.h ==="
+          grep -n "USE_EQ3_ESP32" tasmota/include/tasmota_configurations.h || echo "(없음)"
 
       - name: 3. USE_MI_EXT_GUI any definition
         run: |
-          grep -rn "define USE_MI_EXT_GUI\|undef USE_MI_EXT_GUI" tasmota/ | head -20 || echo "USE_MI_EXT_GUI 정의 없음 (기본값 미정의 - 정상)"
+          grep -rn "define USE_MI_EXT_GUI\|undef USE_MI_EXT_GUI" tasmota/ 2>/dev/null || echo "(USE_MI_EXT_GUI 정의 없음 - 기본 미정의, 정상)"
 
-      - name: 4. configurations.h 920~945 (940 undef 블록의 #ifdef 컨텍스트)
+      - name: 4. configurations.h 850~945 firmware context
         run: |
-          echo "=== 이 undef 블록이 어떤 firmware 조건 안에 있는지 확인 ==="
-          sed -n '850,945p' tasmota/include/tasmota_configurations.h | grep -n "#ifdef\|#ifndef\|#endif\|#elif\|FIRMWARE_\|undef USE_BLE_ESP32\|undef USE_MI_ESP32\|undef USE_ZIGBEE\|undef USE_TCP_BRIDGE"
+          sed -n '850,945p' tasmota/include/tasmota_configurations.h | grep -n "#ifdef\|#ifndef\|#endif\|#elif\|FIRMWARE_\|undef USE_BLE_ESP32\|undef USE_MI_ESP32\|undef USE_ZIGBEE\|undef USE_TCP_BRIDGE" || true
 
-      - name: 5. ESP32.h 125~140 and 238~248 (주입 지점 이전 undef 블록 컨텍스트)
+      - name: 5. ESP32.h undef block context
         run: |
-          echo "=== line 125~140 ==="
-          sed -n '125,140p' tasmota/include/tasmota_configurations_ESP32.h
-          echo "=== line 238~248 ==="
-          sed -n '238,248p' tasmota/include/tasmota_configurations_ESP32.h
+          echo "=== line 120~140 ==="
+          sed -n '120,140p' tasmota/include/tasmota_configurations_ESP32.h
+          echo "=== line 235~250 ==="
+          sed -n '235,250p' tasmota/include/tasmota_configurations_ESP32.h
 
-      - name: 6. NimBLE library presence in grafted lib dirs
+      - name: 6. NimBLE library presence
         run: |
-          echo "=== NimBLEDevice.h 실제 위치 ==="
-          find lib/ -name "NimBLEDevice.h" 2>/dev/null
-          echo "=== libesp32 / libesp32_div 하위 BLE 관련 ==="
-          ls lib/libesp32/ 2>/dev/null | grep -i "ble\|nimble\|mi32\|eq3" || true
-          ls lib/libesp32_div/ 2>/dev/null | grep -i "ble\|nimble\|mi32\|eq3" || true
+          echo "=== NimBLEDevice.h 위치 ==="
+          find lib/ -name "NimBLEDevice.h" 2>/dev/null || echo "(lib/ 내 없음)"
+          echo "=== libesp32 BLE 관련 ==="
+          ls lib/libesp32/ 2>/dev/null | grep -i "ble\|nimble\|mi32\|eq3" || echo "(libesp32 내 BLE 디렉토리명 없음)"
+          ls lib/libesp32_div/ 2>/dev/null | grep -i "ble\|nimble\|mi32\|eq3" || echo "(libesp32_div 내 BLE 디렉토리명 없음)"
