@@ -19,9 +19,16 @@ jobs:
         run: |
           sed -i 's|^[[:space:]]*#define USE_ZIGBEE_ZNP|//&|' tasmota/my_user_config.h
           sed -i 's|^[[:space:]]*//[[:space:]]*#define USE_ZIGBEE_EZSP|#define USE_ZIGBEE_EZSP|' tasmota/my_user_config.h
+          echo "=== Zigbee protocol lines ==="
           grep -n "USE_ZIGBEE_ZNP\|USE_ZIGBEE_EZSP" tasmota/my_user_config.h | head -10
 
-      - name: Inject ZB-GW03 config (Ethernet + BLE)
+      - name: Inject USE_BLE_ESP32 into ZBBRDGPRO section
+        run: |
+          sed -i '/^#endif \/\/ FIRMWARE_ZBBRDGPRO/i #define USE_BLE_ESP32                            // Enable BLE alongside Zigbee bridge' tasmota/include/tasmota_configurations_ESP32.h
+          echo "=== 주입 결과 확인 ==="
+          grep -n "USE_BLE_ESP32\|FIRMWARE_ZBBRDGPRO" tasmota/include/tasmota_configurations_ESP32.h | tail -10
+
+      - name: Inject ZB-GW03 config (Ethernet)
         run: |
           cat > tasmota/user_config_override.h << 'EOF'
           #ifndef _USER_CONFIG_OVERRIDE_H_
@@ -33,7 +40,6 @@ jobs:
           #define ETH_CLKMODE 3
           #undef  ETH_ADDRESS
           #define ETH_ADDRESS 1
-          #define USE_BLE_ESP32
           #endif
           EOF
 
