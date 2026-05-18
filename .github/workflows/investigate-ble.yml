@@ -13,20 +13,17 @@ jobs:
           repository: arendst/Tasmota
           ref: v14.6.0
 
-      - name: Compare bluetooth vs zbbrdgpro environments
+      - name: Find all environments and BLE references
         run: |
-          echo "====== tasmota32-bluetooth ======"
-          grep -A 40 "\[env:tasmota32-bluetooth\]" platformio.ini
+          echo "====== platformio.ini 내 모든 환경명 ======"
+          grep "^\[env:" platformio.ini
 
-          echo "====== tasmota32-zbbrdgpro ======"
-          grep -A 40 "\[env:tasmota32-zbbrdgpro\]" platformio.ini
-
-          echo "====== 베이스 공통 환경 ======"
-          grep -E "^\[common|^\[core|^\[env:tasmota32\b" platformio.ini | head -20
-
-          echo "====== lib/ 디렉토리 목록 ======"
-          ls -la lib/
+          echo "====== BLE 관련 환경명 ======"
+          grep -i "bluetooth\|ble" platformio.ini | head -30 || true
 
           echo "====== NimBLE 위치 ======"
-          find lib/ -name "NimBLEDevice.h" 2>/dev/null
-          find lib/ -name "*nimble*" -o -name "*NimBLE*" 2>/dev/null | head -20
+          find lib/ -name "NimBLEDevice.h" 2>/dev/null || true
+          find lib/ -name "*nimble*" -o -name "*NimBLE*" 2>/dev/null | head -20 || true
+
+          echo "====== tasmota32-zbbrdgpro 환경 ======"
+          grep -A 40 "\[env:tasmota32-zbbrdgpro\]" platformio.ini || true
