@@ -13,23 +13,15 @@ jobs:
           repository: arendst/Tasmota
           ref: v14.6.0
 
-      - name: Explore directory structure
+      - name: Get tasmota32-bluetooth environment detail
         run: |
-          echo "====== 루트 디렉토리 ======"
-          ls -la
+          echo "====== tasmota32-bluetooth 환경 (line 220~270) ======"
+          sed -n '220,270p' platformio_tasmota_env32.ini
 
-          echo "====== .ini 파일 목록 ======"
-          find . -maxdepth 2 -name "*.ini" | sort
+          echo "====== tasmota32-zbbrdgpro 환경 ======"
+          grep -n "tasmota32-zbbrdgpro" platformio_tasmota_env32.ini
+          grep -A 30 "\[env:tasmota32-zbbrdgpro\]" platformio_tasmota_env32.ini
 
-          echo "====== platformio 관련 파일 내용 ======"
-          for f in $(find . -maxdepth 2 -name "*.ini" | sort); do
-            echo "--- $f ---"
-            head -20 "$f"
-            echo ""
-          done
-
-          echo "====== lib/ 디렉토리 ======"
-          ls lib/ || true
-
-          echo "====== BLE/NimBLE 검색 ======"
-          grep -rn "bluetooth\|NimBLE\|nimble" . --include="*.ini" || true
+          echo "====== core32 섹션 ======"
+          grep -A 20 "^\[core32\]" platformio_tasmota_env32.ini || true
+          grep -A 20 "^\[core32\]" platformio.ini || true
