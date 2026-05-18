@@ -35,6 +35,7 @@ jobs:
           #define ETH_CLKMODE 3
           #undef  ETH_ADDRESS
           #define ETH_ADDRESS 1
+          #define USE_BLE_ESP32
 
           #endif
           EOF
@@ -49,6 +50,17 @@ jobs:
 
       - name: Build tasmota32-zbbrdgpro
         run: platformio run -e tasmota32-zbbrdgpro
+
+      - name: Check firmware size
+        run: |
+          ls -lh build_output/firmware/tasmota32-zbbrdgpro.bin
+          SIZE=$(stat -c%s build_output/firmware/tasmota32-zbbrdgpro.bin)
+          echo "Binary size: $SIZE bytes ($(( SIZE / 1024 )) KB)"
+          if [ $SIZE -gt 1900000 ]; then
+            echo "WARNING: Binary exceeds 1900KB - OTA may fail"
+          else
+            echo "OK: Binary within OTA partition limit"
+          fi
 
       - name: Upload firmware artifact
         uses: actions/upload-artifact@v4
