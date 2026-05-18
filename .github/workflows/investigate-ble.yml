@@ -13,15 +13,16 @@ jobs:
           repository: arendst/Tasmota
           ref: v14.6.0
 
-      - name: Get tasmota32-bluetooth environment detail
+      - name: Find FIRMWARE_BLUETOOTH defines
         run: |
-          echo "====== tasmota32-bluetooth 환경 (line 220~270) ======"
-          sed -n '220,270p' platformio_tasmota_env32.ini
+          echo "====== FIRMWARE_BLUETOOTH 정의 위치 ======"
+          grep -rn "FIRMWARE_BLUETOOTH" tasmota/ | head -30
 
-          echo "====== tasmota32-zbbrdgpro 환경 ======"
-          grep -n "tasmota32-zbbrdgpro" platformio_tasmota_env32.ini
-          grep -A 30 "\[env:tasmota32-zbbrdgpro\]" platformio_tasmota_env32.ini
+          echo "====== FIRMWARE_ZBBRDGPRO 정의 위치 ======"
+          grep -rn "FIRMWARE_ZBBRDGPRO" tasmota/ | head -30
 
-          echo "====== core32 섹션 ======"
-          grep -A 20 "^\[core32\]" platformio_tasmota_env32.ini || true
-          grep -A 20 "^\[core32\]" platformio.ini || true
+          echo "====== BLE 관련 설정 파일 ======"
+          find tasmota/ -name "*.h" | xargs grep -l "USE_BLE_ESP32" 2>/dev/null
+
+          echo "====== USE_BLE_ESP32 관련 define 블록 ======"
+          grep -rn "USE_BLE_ESP32" tasmota/ | grep -v ".ino" | head -30
