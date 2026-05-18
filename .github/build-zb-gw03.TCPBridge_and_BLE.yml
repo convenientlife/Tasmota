@@ -1,0 +1,75 @@
+name: Build ZB-GW03 Tasmota with TCP Bridge & BLE
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+    steps:
+      - name: Checkout stable Tasmota v14.6.0
+        uses: actions/checkout@v4
+        with:
+          repository: arendst/Tasmota
+          ref: v14.6.0
+
+      - name: Switch Zigbee protocol ZNP -> EZSP in source
+        run: |
+          sed -i 's|^[[:space:]]*#define USE_ZIGBEE_ZNP|//&|' tasmota/my_user_config.h
+          sed -i 's|^[[:space:]]*//[[:space:]]*#define USE_ZIGBEE_EZSP|#define USE_ZIGBEE_EZSP|' tasmota/my_user_config.h
+          grep -n "USE_ZIGBEE_ZNP\|USE_ZIGBEE_EZSP" tasmota/my_user_config.h | head -10
+
+      - name: Inject ZB-GW03 config (Ethernet + BLE)
+        run: |
+          cat > tasmota/user_config_override.h << 'EOF'
+          #ifndef _USER_CONFIG_OVERRIDE_H_
+          #define _USER_CONFIG_OVERRIDE_H_
+          #define USE_ZIGBEE_EEPROM
+          #define USE_ZIGBEE_CHANNEL 11
+          #define USE_ETHERNET
+          #define ETH_TYPE 0
+          #define ETH_CLKMODE 3
+          #undef  ETH_ADDRESS
+          #define ETH_ADDRESS 1
+          #define USE_BLE_ESP32
+          #endif
+          EOF
+
+      - name: Graft BLE lib paths from tasmota32-bluetooth
+        run: |
+          cat > platformio_override.ini << 'EOF'
+          [env:tasmota32-zbbrdgpro]
+          lib_extra_dirs = lib/lib_basic, lib/lib_ssl, lib/libesp32, lib/libesp32_div, lib/lib_i2c
+          EOF
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Install PlatformIO
+        run: pip install platformio
+
+      - name: Build tasmota32-zbbrdgpro
+        run: platformio run -e tasmota32-zbbrdgpro
+
+      - name: Check firmware size
+        run: |
+          SIZE=$(stat -c%s build_output/firmware/tasmota32-zbbrdgpro.bin)
+          echo "Binary size: $SIZE bytes ($(( SIZE / 1024 )) KB)"
+          if [ $SIZE -gt 1900000 ]; then
+            echo "WARNING: OTA 파티션 초과 가능성"
+          else
+            echo "OK: OTA 가능 크기"
+          fi
+
+      - name: Upload firmware artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tasmota32-zb-gw03-ble
+          path: |
+            build_output/firmware/tasmota32-zbbrdgpro.bin
+            build_output/firmware/tasmota32-zbbrdgpro.factory.bin
+          retention-days: 7
