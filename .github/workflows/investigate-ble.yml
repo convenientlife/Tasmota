@@ -13,17 +13,23 @@ jobs:
           repository: arendst/Tasmota
           ref: v14.6.0
 
-      - name: Find all environments and BLE references
+      - name: Explore directory structure
         run: |
-          echo "====== platformio.ini 내 모든 환경명 ======"
-          grep "^\[env:" platformio.ini
+          echo "====== 루트 디렉토리 ======"
+          ls -la
 
-          echo "====== BLE 관련 환경명 ======"
-          grep -i "bluetooth\|ble" platformio.ini | head -30 || true
+          echo "====== .ini 파일 목록 ======"
+          find . -maxdepth 2 -name "*.ini" | sort
 
-          echo "====== NimBLE 위치 ======"
-          find lib/ -name "NimBLEDevice.h" 2>/dev/null || true
-          find lib/ -name "*nimble*" -o -name "*NimBLE*" 2>/dev/null | head -20 || true
+          echo "====== platformio 관련 파일 내용 ======"
+          for f in $(find . -maxdepth 2 -name "*.ini" | sort); do
+            echo "--- $f ---"
+            head -20 "$f"
+            echo ""
+          done
 
-          echo "====== tasmota32-zbbrdgpro 환경 ======"
-          grep -A 40 "\[env:tasmota32-zbbrdgpro\]" platformio.ini || true
+          echo "====== lib/ 디렉토리 ======"
+          ls lib/ || true
+
+          echo "====== BLE/NimBLE 검색 ======"
+          grep -rn "bluetooth\|NimBLE\|nimble" . --include="*.ini" || true
