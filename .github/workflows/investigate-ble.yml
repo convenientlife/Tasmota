@@ -13,16 +13,15 @@ jobs:
           repository: arendst/Tasmota
           ref: v14.6.0
 
-      - name: Find FIRMWARE_BLUETOOTH defines
+      - name: Get ZBBRDGPRO section and undef context
         run: |
-          echo "====== FIRMWARE_BLUETOOTH 정의 위치 ======"
-          grep -rn "FIRMWARE_BLUETOOTH" tasmota/ | head -30
+          echo "====== ZBBRDGPRO 섹션 (491~540) ======"
+          sed -n '491,540p' tasmota/include/tasmota_configurations_ESP32.h
 
-          echo "====== FIRMWARE_ZBBRDGPRO 정의 위치 ======"
-          grep -rn "FIRMWARE_ZBBRDGPRO" tasmota/ | head -30
+          echo "====== configurations.h 930~950 (undef line 940 주변) ======"
+          sed -n '930,950p' tasmota/include/tasmota_configurations.h
 
-          echo "====== BLE 관련 설정 파일 ======"
-          find tasmota/ -name "*.h" | xargs grep -l "USE_BLE_ESP32" 2>/dev/null
-
-          echo "====== USE_BLE_ESP32 관련 define 블록 ======"
-          grep -rn "USE_BLE_ESP32" tasmota/ | grep -v ".ino" | head -30
+          echo "====== user_config_override.h include 위치 ======"
+          grep -n "user_config_override\|USER_CONFIG_OVERRIDE" tasmota/my_user_config.h | tail -5
+          grep -rn "user_config_override\|USER_CONFIG_OVERRIDE" tasmota/tasmota.h 2>/dev/null || true
+          grep -rn "user_config_override\|USER_CONFIG_OVERRIDE" tasmota/include/ | head -10
