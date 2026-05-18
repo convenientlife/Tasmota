@@ -1,4 +1,4 @@
-name: Build ZB-GW03 Tasmota with TCP Bridge
+name: Build ZB-GW03 Tasmota with TCP Bridge & BLE
 
 on:
   workflow_dispatch:
@@ -19,15 +19,13 @@ jobs:
         run: |
           sed -i 's|^[[:space:]]*#define USE_ZIGBEE_ZNP|//&|' tasmota/my_user_config.h
           sed -i 's|^[[:space:]]*//[[:space:]]*#define USE_ZIGBEE_EZSP|#define USE_ZIGBEE_EZSP|' tasmota/my_user_config.h
-          echo "=== Zigbee protocol lines ==="
           grep -n "USE_ZIGBEE_ZNP\|USE_ZIGBEE_EZSP" tasmota/my_user_config.h | head -10
 
-      - name: Inject ZB-GW03 config (Ethernet)
+      - name: Inject ZB-GW03 config (Ethernet + BLE)
         run: |
           cat > tasmota/user_config_override.h << 'EOF'
           #ifndef _USER_CONFIG_OVERRIDE_H_
           #define _USER_CONFIG_OVERRIDE_H_
-
           #define USE_ZIGBEE_EEPROM
           #define USE_ZIGBEE_CHANNEL 11
           #define USE_ETHERNET
@@ -36,8 +34,14 @@ jobs:
           #undef  ETH_ADDRESS
           #define ETH_ADDRESS 1
           #define USE_BLE_ESP32
-
           #endif
+          EOF
+
+      - name: Graft BLE lib paths from tasmota32-bluetooth
+        run: |
+          cat > platformio_override.ini << 'EOF'
+          [env:tasmota32-zbbrdgpro]
+          lib_extra_dirs = lib/lib_basic, lib/lib_ssl, lib/libesp32, lib/libesp32_div, lib/lib_i2c
           EOF
 
       - name: Set up Python
@@ -53,19 +57,18 @@ jobs:
 
       - name: Check firmware size
         run: |
-          ls -lh build_output/firmware/tasmota32-zbbrdgpro.bin
           SIZE=$(stat -c%s build_output/firmware/tasmota32-zbbrdgpro.bin)
           echo "Binary size: $SIZE bytes ($(( SIZE / 1024 )) KB)"
           if [ $SIZE -gt 1900000 ]; then
-            echo "WARNING: Binary exceeds 1900KB - OTA may fail"
+            echo "WARNING: OTA 파티션 초과 가능성"
           else
-            echo "OK: Binary within OTA partition limit"
+            echo "OK: OTA 가능 크기"
           fi
 
       - name: Upload firmware artifact
         uses: actions/upload-artifact@v4
         with:
-          name: tasmota32-zb-gw03
+          name: tasmota32-zb-gw03-ble
           path: |
             build_output/firmware/tasmota32-zbbrdgpro.bin
             build_output/firmware/tasmota32-zbbrdgpro.factory.bin
