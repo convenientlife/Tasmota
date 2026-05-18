@@ -22,11 +22,15 @@ jobs:
           echo "=== Zigbee protocol lines ==="
           grep -n "USE_ZIGBEE_ZNP\|USE_ZIGBEE_EZSP" tasmota/my_user_config.h | head -10
 
-      - name: Inject USE_BLE_ESP32 into ZBBRDGPRO section
+      - name: Inject full BLE stack into ZBBRDGPRO section
         run: |
-          sed -i '/^#endif \/\/ FIRMWARE_ZBBRDGPRO/i #define USE_BLE_ESP32                            // Enable BLE alongside Zigbee bridge' tasmota/include/tasmota_configurations_ESP32.h
-          echo "=== 주입 결과 확인 ==="
-          grep -n "USE_BLE_ESP32\|FIRMWARE_ZBBRDGPRO" tasmota/include/tasmota_configurations_ESP32.h | tail -10
+          sed -i '/^#endif \/\/ FIRMWARE_ZBBRDGPRO/i #define USE_BLE_ESP32                            // BLE NimBLE core driver' tasmota/include/tasmota_configurations_ESP32.h
+          sed -i '/^#endif \/\/ FIRMWARE_ZBBRDGPRO/i #define USE_EQ3_ESP32                            // BLE bundle component (matches FIRMWARE_BLUETOOTH)' tasmota/include/tasmota_configurations_ESP32.h
+          sed -i '/^#endif \/\/ FIRMWARE_ZBBRDGPRO/i #define USE_MI_ESP32                             // BLE scan loop + /ble UI + telemetry' tasmota/include/tasmota_configurations_ESP32.h
+          echo "=== 주입 결과 (FIRMWARE_ZBBRDGPRO 섹션 끝부분) ==="
+          grep -n "USE_BLE_ESP32\|USE_EQ3_ESP32\|USE_MI_ESP32\|FIRMWARE_ZBBRDGPRO" tasmota/include/tasmota_configurations_ESP32.h | sed -n '/491/,/540/p'
+          echo "--- 530~540 라인 직접 확인 ---"
+          sed -n '530,545p' tasmota/include/tasmota_configurations_ESP32.h
 
       - name: Inject ZB-GW03 config (Ethernet)
         run: |
@@ -64,11 +68,14 @@ jobs:
       - name: Check firmware size
         run: |
           SIZE=$(stat -c%s build_output/firmware/tasmota32-zbbrdgpro.bin)
-          echo "Binary size: $SIZE bytes ($(( SIZE / 1024 )) KB)"
-          if [ $SIZE -gt 1900000 ]; then
-            echo "WARNING: OTA 파티션 초과 가능성"
+          KB=$(( SIZE / 1024 ))
+          echo "Binary size: $SIZE bytes ($KB KB)"
+          echo "ZBBRDGPRO app partition limit: 1856 KB"
+          if [ $SIZE -gt 1900480 ]; then
+            echo "FAIL: 1856KB 파티션 초과 - OTA 불가. USE_EQ3_ESP32 제거 또는 파티션 변경 필요"
+            exit 1
           else
-            echo "OK: OTA 가능 크기"
+            echo "OK: OTA 가능 (여유 $(( 1900480 - SIZE )) bytes)"
           fi
 
       - name: Upload firmware artifact
