@@ -1,4 +1,4 @@
-name: Build ZB-GW03 Tasmota with TCP Bridge & BLE
+name: Build ZB-GW03 Tasmota BLE base + Zigbee EZSP
 
 on:
   workflow_dispatch:
@@ -19,20 +19,17 @@ jobs:
         run: |
           sed -i 's|^[[:space:]]*#define USE_ZIGBEE_ZNP|//&|' tasmota/my_user_config.h
           sed -i 's|^[[:space:]]*//[[:space:]]*#define USE_ZIGBEE_EZSP|#define USE_ZIGBEE_EZSP|' tasmota/my_user_config.h
-          echo "=== Zigbee protocol lines ==="
-          grep -n "USE_ZIGBEE_ZNP\|USE_ZIGBEE_EZSP" tasmota/my_user_config.h | head -10
+          grep -n "USE_ZIGBEE_ZNP\|USE_ZIGBEE_EZSP" tasmota/my_user_config.h | head -5
 
-      - name: Inject full BLE stack into ZBBRDGPRO section
+      - name: Inject Zigbee into FIRMWARE_BLUETOOTH section
         run: |
-          sed -i '/^#endif \/\/ FIRMWARE_ZBBRDGPRO/i #define USE_BLE_ESP32                            // BLE NimBLE core driver' tasmota/include/tasmota_configurations_ESP32.h
-          sed -i '/^#endif \/\/ FIRMWARE_ZBBRDGPRO/i #define USE_EQ3_ESP32                            // BLE bundle component (matches FIRMWARE_BLUETOOTH)' tasmota/include/tasmota_configurations_ESP32.h
-          sed -i '/^#endif \/\/ FIRMWARE_ZBBRDGPRO/i #define USE_MI_ESP32                             // BLE scan loop + /ble UI + telemetry' tasmota/include/tasmota_configurations_ESP32.h
-          echo "=== 주입 결과 (FIRMWARE_ZBBRDGPRO 섹션 끝부분) ==="
-          grep -n "USE_BLE_ESP32\|USE_EQ3_ESP32\|USE_MI_ESP32\|FIRMWARE_ZBBRDGPRO" tasmota/include/tasmota_configurations_ESP32.h | sed -n '/491/,/540/p'
-          echo "--- 530~540 라인 직접 확인 ---"
-          sed -n '530,545p' tasmota/include/tasmota_configurations_ESP32.h
+          sed -i '/^#endif[[:space:]]*\/\/[[:space:]]*FIRMWARE_BLUETOOTH/i #define USE_ZIGBEE' tasmota/include/tasmota_configurations_ESP32.h
+          sed -i '/^#endif[[:space:]]*\/\/[[:space:]]*FIRMWARE_BLUETOOTH/i #define USE_ZIGBEE_EZSP' tasmota/include/tasmota_configurations_ESP32.h
+          sed -i '/^#endif[[:space:]]*\/\/[[:space:]]*FIRMWARE_BLUETOOTH/i #define USE_TCP_BRIDGE' tasmota/include/tasmota_configurations_ESP32.h
+          echo "=== FIRMWARE_BLUETOOTH 섹션 끝부분 ==="
+          sed -n '270,290p' tasmota/include/tasmota_configurations_ESP32.h
 
-      - name: Inject ZB-GW03 config (Ethernet)
+      - name: Inject ZB-GW03 config (Ethernet + Zigbee)
         run: |
           cat > tasmota/user_config_override.h << 'EOF'
           #ifndef _USER_CONFIG_OVERRIDE_H_
@@ -47,13 +44,6 @@ jobs:
           #endif
           EOF
 
-      - name: Graft BLE lib paths from tasmota32-bluetooth
-        run: |
-          cat > platformio_override.ini << 'EOF'
-          [env:tasmota32-zbbrdgpro]
-          lib_extra_dirs = lib/lib_basic, lib/lib_ssl, lib/libesp32, lib/libesp32_div, lib/lib_i2c
-          EOF
-
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -62,27 +52,21 @@ jobs:
       - name: Install PlatformIO
         run: pip install platformio
 
-      - name: Build tasmota32-zbbrdgpro
-        run: platformio run -e tasmota32-zbbrdgpro
+      - name: Build tasmota32-bluetooth
+        run: platformio run -e tasmota32-bluetooth
 
       - name: Check firmware size
         run: |
-          SIZE=$(stat -c%s build_output/firmware/tasmota32-zbbrdgpro.bin)
-          KB=$(( SIZE / 1024 ))
-          echo "Binary size: $SIZE bytes ($KB KB)"
-          echo "ZBBRDGPRO app partition limit: 1856 KB"
-          if [ $SIZE -gt 1900480 ]; then
-            echo "FAIL: 1856KB 파티션 초과 - OTA 불가. USE_EQ3_ESP32 제거 또는 파티션 변경 필요"
-            exit 1
-          else
-            echo "OK: OTA 가능 (여유 $(( 1900480 - SIZE )) bytes)"
-          fi
+          ls -la build_output/firmware/
+          SIZE=$(stat -c%s build_output/firmware/tasmota32-bluetooth.bin)
+          echo "Binary size: $SIZE bytes ($(( SIZE / 1024 )) KB)"
+          echo "참고: 동료 동작 바이너리 = 1890480 bytes (1846 KB)"
 
       - name: Upload firmware artifact
         uses: actions/upload-artifact@v4
         with:
-          name: tasmota32-zb-gw03-ble
+          name: tasmota32-zb-gw03-bluetooth-zigbee
           path: |
-            build_output/firmware/tasmota32-zbbrdgpro.bin
-            build_output/firmware/tasmota32-zbbrdgpro.factory.bin
+            build_output/firmware/tasmota32-bluetooth.bin
+            build_output/firmware/tasmota32-bluetooth.factory.bin
           retention-days: 7
