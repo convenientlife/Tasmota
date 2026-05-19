@@ -1,4 +1,4 @@
-name: Build FINAL v1 + locate real /ble handler
+name: Build FINAL - v1 + /ble race fix
 
 on:
   workflow_dispatch:
@@ -14,18 +14,22 @@ jobs:
           repository: arendst/Tasmota
           ref: v14.6.0
 
-      - name: Locate REAL /ble web handler (all files)
+      - name: Patch xdrv_79 - register /ble handler before BLEInitState early-return
         run: |
-          echo "=== 'ble' 웹 경로 등록부 전체 검색 ==="
-          grep -rn "WebServer.*on\|Webserver->on\|->on(.*ble\|PSTR(\"/ble\|\"ble\"\|/ble\b\|HandleBleConfiguration\|BleConfiguration" tasmota/ 2>/dev/null | grep -i "ble" | head -30 || true
-          echo "=== xdrv_79 (USE_BLE_ESP32) 웹 핸들러 ==="
-          ls tasmota/*/xdrv_79* tasmota/xdrv_79* 2>/dev/null || true
-          for f in $(grep -rln "USE_BLE_ESP32" tasmota/ 2>/dev/null | grep -i "xdrv_79\|ble"); do
-            echo "--- $f ---"
-            grep -n "On(\|WebServer\|/ble\|HandleBle\|D_BLE_\|WSContent" "$f" 2>/dev/null | head -20
-          done
-          echo "=== D_BLE_DEVICES 매크로 사용처 (전체 재귀) ==="
-          grep -rln "D_BLE_DEVICES\|D_BLE_ENABLE" tasmota/ 2>/dev/null | grep -v "language/" || true
+          F=tasmota/tasmota_xdrv_driver/xdrv_79_esp32_ble.ino
+          awk '
+          /bool Xdrv79\(uint32_t function\)/ {inx=1}
+          inx && /if \(!BLE_ESP32::BLEInitState\) \{/ && !done {
+            print "#ifdef USE_WEBSERVER";
+            print "  if (FUNC_WEB_ADD_BUTTON == function) { WSContentSend_P(BLE_ESP32::HTTP_BTN_MENU_BLE); return false; }";
+            print "  if (FUNC_WEB_ADD_HANDLER == function) { WebServer_on(PSTR(\"/\" WEB_HANDLE_BLE), BLE_ESP32::HandleBleConfiguration); return false; }";
+            print "#endif";
+            done=1
+          }
+          {print}
+          ' "$F" > "$F.new" && mv "$F.new" "$F"
+          echo "=== 패치 검증 (Xdrv79 함수 시작~switch) ==="
+          awk '/bool Xdrv79\(uint32_t function\)/,/switch \(function\) \{/' "$F"
 
       - name: Switch Zigbee protocol ZNP -> EZSP
         run: |
@@ -38,7 +42,7 @@ jobs:
           sed -i '/^#endif[[:space:]]*\/\/[[:space:]]*FIRMWARE_BLUETOOTH/i #define USE_ZIGBEE_EZSP' tasmota/include/tasmota_configurations_ESP32.h
           sed -i '/^#endif[[:space:]]*\/\/[[:space:]]*FIRMWARE_BLUETOOTH/i #define USE_TCP_BRIDGE' tasmota/include/tasmota_configurations_ESP32.h
 
-      - name: Inject ZB-GW03 config (Ethernet + SetOption115 + footer, NO MI_EXT_GUI)
+      - name: Inject ZB-GW03 config (Ethernet + SetOption115 + footer)
         run: |
           cat > tasmota/user_config_override.h << 'EOF'
           #ifndef _USER_CONFIG_OVERRIDE_H_
@@ -67,10 +71,10 @@ jobs:
       - name: Check firmware size
         run: |
           SIZE=$(stat -c%s build_output/firmware/tasmota32-bluetooth.bin)
-          echo "Binary size: $SIZE bytes ($(( SIZE / 1024 )) KB) / v1=1847 동료=1846"
+          echo "Binary size: $SIZE bytes ($(( SIZE / 1024 )) KB) / v1=1847"
       - uses: actions/upload-artifact@v4
         with:
-          name: tasmota32-zb-gw03-final-v1-restored
+          name: tasmota32-zb-gw03-final-blefix
           path: |
             build_output/firmware/tasmota32-bluetooth.bin
             build_output/firmware/tasmota32-bluetooth.factory.bin
