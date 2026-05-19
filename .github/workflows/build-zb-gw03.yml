@@ -1,4 +1,4 @@
-name: Build ZB-GW03 bluetooth+zigbee (footer) + investigate
+name: Build ZB-GW03 FINAL - bt+zigbee+ble UI+SetOption115+footer
 
 on:
   workflow_dispatch:
@@ -15,45 +15,22 @@ jobs:
           repository: arendst/Tasmota
           ref: v14.6.0
 
-      - name: INVESTIGATE - /ble define, MI_EXT_GUI, SetOption115
-        run: |
-          echo "########## Q1: /ble 웹페이지 가드 define ##########"
-          for f in $(grep -rln "Devices Seen\|action='ble'" tasmota/ 2>/dev/null); do
-            echo "--- $f : USE_ 가드 컨텍스트 ---"
-            grep -n "USE_MI_EXT_GUI\|USE_MI_ESP32\|#ifdef\|#ifndef\|#endif\|action='ble'\|Devices Seen\|WebServer\|Webserver\|RegisterWeb" "$f" | head -30
-          done
-          echo ""
-          echo "########## Q2: USE_MI_EXT_GUI 전체 참조 ##########"
-          grep -rn "USE_MI_EXT_GUI" tasmota/ 2>/dev/null | head -25 || echo "(없음)"
-          echo ""
-          echo "########## Q3: SetOption115 매핑 + 기본값 ##########"
-          echo "--- P115 / SetOption115 처리 ---"
-          grep -rn "P115\|115" tasmota/xsns_62*.ino tasmota/xdrv_*.ino 2>/dev/null | grep -iE "setoption|mi32|ble|flag5|MasterEnable" | head -20 || echo "(없음)"
-          echo "--- flag5 / mi32 설정 멤버 ---"
-          grep -rn "flag5\|mi32" tasmota/include/tasmota_types.h 2>/dev/null | head -20 || echo "(없음)"
-          echo "--- Enable Bluetooth 체크박스가 set 하는 멤버 ---"
-          for f in $(grep -rln "Enable Bluetooth" tasmota/ 2>/dev/null); do
-            echo "--- $f ---"
-            grep -n "Enable Bluetooth\|flag5\|SetOption115\|MasterEnable\|->enable\|mi32" "$f" | head -20
-          done
-          echo "--- my_user_config.h SetOption 기본값 override 패턴 ---"
-          grep -n "SetOption\|flag5\|MI32\|MasterEnable" tasmota/my_user_config.h 2>/dev/null | head -15 || echo "(없음)"
-
       - name: Switch Zigbee protocol ZNP -> EZSP in source
         run: |
           sed -i 's|^[[:space:]]*#define USE_ZIGBEE_ZNP|//&|' tasmota/my_user_config.h
           sed -i 's|^[[:space:]]*//[[:space:]]*#define USE_ZIGBEE_EZSP|#define USE_ZIGBEE_EZSP|' tasmota/my_user_config.h
           grep -n "USE_ZIGBEE_ZNP\|USE_ZIGBEE_EZSP" tasmota/my_user_config.h | head -5
 
-      - name: Inject Zigbee into FIRMWARE_BLUETOOTH section
+      - name: Inject Zigbee + MI_EXT_GUI into FIRMWARE_BLUETOOTH section
         run: |
           sed -i '/^#endif[[:space:]]*\/\/[[:space:]]*FIRMWARE_BLUETOOTH/i #define USE_ZIGBEE' tasmota/include/tasmota_configurations_ESP32.h
           sed -i '/^#endif[[:space:]]*\/\/[[:space:]]*FIRMWARE_BLUETOOTH/i #define USE_ZIGBEE_EZSP' tasmota/include/tasmota_configurations_ESP32.h
           sed -i '/^#endif[[:space:]]*\/\/[[:space:]]*FIRMWARE_BLUETOOTH/i #define USE_TCP_BRIDGE' tasmota/include/tasmota_configurations_ESP32.h
-          echo "=== FIRMWARE_BLUETOOTH 섹션 끝 ==="
-          sed -n '270,290p' tasmota/include/tasmota_configurations_ESP32.h
+          sed -i '/^#endif[[:space:]]*\/\/[[:space:]]*FIRMWARE_BLUETOOTH/i #define USE_MI_EXT_GUI' tasmota/include/tasmota_configurations_ESP32.h
+          echo "=== FIRMWARE_BLUETOOTH 섹션 끝부분 검증 ==="
+          sed -n '251,290p' tasmota/include/tasmota_configurations_ESP32.h
 
-      - name: Inject ZB-GW03 config (Ethernet + Zigbee + footer)
+      - name: Inject ZB-GW03 config (Ethernet + SetOption115 + footer)
         run: |
           cat > tasmota/user_config_override.h << 'EOF'
           #ifndef _USER_CONFIG_OVERRIDE_H_
@@ -65,6 +42,7 @@ jobs:
           #define ETH_CLKMODE 3
           #undef  ETH_ADDRESS
           #define ETH_ADDRESS 1
+          #define BLE_ESP32_ENABLE true
           #undef  CODE_IMAGE_STR
           #define CODE_IMAGE_STR "tcp bridge and bluetooth"
           #endif
@@ -89,7 +67,7 @@ jobs:
       - name: Upload firmware artifact
         uses: actions/upload-artifact@v4
         with:
-          name: tasmota32-zb-gw03-bt-zigbee-footer
+          name: tasmota32-zb-gw03-final
           path: |
             build_output/firmware/tasmota32-bluetooth.bin
             build_output/firmware/tasmota32-bluetooth.factory.bin
