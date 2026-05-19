@@ -1,4 +1,4 @@
-name: Build ZB-GW03 FINAL v2 - MI_EXT_GUI proper mode
+name: Build FINAL v1 + locate real /ble handler
 
 on:
   workflow_dispatch:
@@ -9,38 +9,40 @@ jobs:
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     steps:
-      - name: Checkout stable Tasmota v14.6.0
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           repository: arendst/Tasmota
           ref: v14.6.0
 
-      - name: Verify /ble web handler guard in xsns_62
+      - name: Locate REAL /ble web handler (all files)
         run: |
-          F=tasmota/tasmota_xsns_sensor/xsns_62_esp32_mi.ino
-          echo "=== /ble 핸들러 등록부 + USE_BLE_ESP32 상호배타 가드 ==="
-          grep -n "WSContentRegister\|On(.*ble\|Webserver.*ble\|/ble\|USE_BLE_ESP32\|USE_MI_EXT_GUI" "$F" | head -40
+          echo "=== 'ble' 웹 경로 등록부 전체 검색 ==="
+          grep -rn "WebServer.*on\|Webserver->on\|->on(.*ble\|PSTR(\"/ble\|\"ble\"\|/ble\b\|HandleBleConfiguration\|BleConfiguration" tasmota/ 2>/dev/null | grep -i "ble" | head -30 || true
+          echo "=== xdrv_79 (USE_BLE_ESP32) 웹 핸들러 ==="
+          ls tasmota/*/xdrv_79* tasmota/xdrv_79* 2>/dev/null || true
+          for f in $(grep -rln "USE_BLE_ESP32" tasmota/ 2>/dev/null | grep -i "xdrv_79\|ble"); do
+            echo "--- $f ---"
+            grep -n "On(\|WebServer\|/ble\|HandleBle\|D_BLE_\|WSContent" "$f" 2>/dev/null | head -20
+          done
+          echo "=== D_BLE_DEVICES 매크로 사용처 (전체 재귀) ==="
+          grep -rln "D_BLE_DEVICES\|D_BLE_ENABLE" tasmota/ 2>/dev/null | grep -v "language/" || true
 
-      - name: Switch Zigbee protocol ZNP -> EZSP in source
+      - name: Switch Zigbee protocol ZNP -> EZSP
         run: |
           sed -i 's|^[[:space:]]*#define USE_ZIGBEE_ZNP|//&|' tasmota/my_user_config.h
           sed -i 's|^[[:space:]]*//[[:space:]]*#define USE_ZIGBEE_EZSP|#define USE_ZIGBEE_EZSP|' tasmota/my_user_config.h
-          grep -n "USE_ZIGBEE_ZNP\|USE_ZIGBEE_EZSP" tasmota/my_user_config.h | head -5
 
-      - name: Inject Zigbee into FIRMWARE_BLUETOOTH section (NO MI_EXT_GUI here)
+      - name: Inject Zigbee into FIRMWARE_BLUETOOTH section
         run: |
           sed -i '/^#endif[[:space:]]*\/\/[[:space:]]*FIRMWARE_BLUETOOTH/i #define USE_ZIGBEE' tasmota/include/tasmota_configurations_ESP32.h
           sed -i '/^#endif[[:space:]]*\/\/[[:space:]]*FIRMWARE_BLUETOOTH/i #define USE_ZIGBEE_EZSP' tasmota/include/tasmota_configurations_ESP32.h
           sed -i '/^#endif[[:space:]]*\/\/[[:space:]]*FIRMWARE_BLUETOOTH/i #define USE_TCP_BRIDGE' tasmota/include/tasmota_configurations_ESP32.h
-          echo "=== FIRMWARE_BLUETOOTH 섹션 ==="
-          sed -n '251,285p' tasmota/include/tasmota_configurations_ESP32.h
 
-      - name: Inject ZB-GW03 config (MI_EXT_GUI EARLY + Ethernet + SetOption115 + footer)
+      - name: Inject ZB-GW03 config (Ethernet + SetOption115 + footer, NO MI_EXT_GUI)
         run: |
           cat > tasmota/user_config_override.h << 'EOF'
           #ifndef _USER_CONFIG_OVERRIDE_H_
           #define _USER_CONFIG_OVERRIDE_H_
-          #define USE_MI_EXT_GUI
           #define USE_ZIGBEE_EEPROM
           #define USE_ZIGBEE_CHANNEL 11
           #define USE_ETHERNET
@@ -58,23 +60,17 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.x'
-
       - name: Install PlatformIO
         run: pip install platformio
-
       - name: Build tasmota32-bluetooth
         run: platformio run -e tasmota32-bluetooth
-
       - name: Check firmware size
         run: |
           SIZE=$(stat -c%s build_output/firmware/tasmota32-bluetooth.bin)
-          echo "Binary size: $SIZE bytes ($(( SIZE / 1024 )) KB)  / 동료 1846 KB / 이전(EXT_GUI 미적용) 1847 KB"
-          echo "→ 크기가 1847과 달라지면 USE_MI_EXT_GUI 실제 적용된 것"
-
-      - name: Upload firmware artifact
-        uses: actions/upload-artifact@v4
+          echo "Binary size: $SIZE bytes ($(( SIZE / 1024 )) KB) / v1=1847 동료=1846"
+      - uses: actions/upload-artifact@v4
         with:
-          name: tasmota32-zb-gw03-final-v2
+          name: tasmota32-zb-gw03-final-v1-restored
           path: |
             build_output/firmware/tasmota32-bluetooth.bin
             build_output/firmware/tasmota32-bluetooth.factory.bin
