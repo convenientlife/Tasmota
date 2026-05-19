@@ -1,4 +1,4 @@
-name: Investigate ble-page guard and SetOption115
+name: Locate /ble handler guard in xdrv_79
 
 on:
   workflow_dispatch:
@@ -7,32 +7,25 @@ jobs:
   investigate:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout stable Tasmota v14.6.0
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           repository: arendst/Tasmota
           ref: v14.6.0
 
-      - name: Q1 - real /ble handler source + guard
+      - name: xdrv_79 /ble registration guard context
         run: |
-          echo "=== D_BLE_DEVICES / D_BLE_ENABLE 사용 .ino 파일 ==="
-          grep -rln "D_BLE_DEVICES\|D_BLE_ENABLE" tasmota/*.ino 2>/dev/null || echo "(없음)"
-          for f in $(grep -rln "D_BLE_DEVICES\|D_BLE_ENABLE" tasmota/*.ino 2>/dev/null); do
-            echo "######## $f ########"
-            grep -n "USE_MI_EXT_GUI\|USE_MI_ESP32\|USE_BLE_ESP32\|#ifdef\|#ifndef\|#else\|#endif\|\"ble\"\|/ble\|D_BLE_DEVICES\|D_BLE_ENABLE\|WebServer\|On(\"" "$f" | head -40
-          done
+          F=tasmota/tasmota_xdrv_driver/xdrv_79_esp32_ble.ino
+          echo "=== 3560~3760 (HTTP_FORM_BLE ~ WebServer_on 등록부) ==="
+          sed -n '3560,3760p' "$F"
 
-      - name: Q2 - USE_MI_EXT_GUI all references
+      - name: FUNC_WEB_ADD_HANDLER / ifdef context around 3743
         run: |
-          grep -rn "USE_MI_EXT_GUI" tasmota/ 2>/dev/null | head -30 || echo "(USE_MI_EXT_GUI 참조 없음)"
+          F=tasmota/tasmota_xdrv_driver/xdrv_79_esp32_ble.ino
+          echo "=== 3700~3760 라인 + #ifdef/#if/case 컨텍스트 ==="
+          awk 'NR>=3000 && NR<=3760 && (/#ifdef|#ifndef|#if |#else|#endif|FUNC_WEB|case |WebServer_on|HandleBleConfiguration|WEB_HANDLE_BLE/) {print NR": "$0}' "$F"
 
-      - name: Q3 - SetOption115 define and flag mapping
+      - name: USE_ guards wrapping the web config block
         run: |
-          echo "=== my_user_config.h 의 [SetOption115] 라인 ==="
-          grep -n "SetOption115\|\[SetOption11[0-9]\]" tasmota/my_user_config.h 2>/dev/null || echo "(my_user_config.h 에 SetOption115 명시 default 없음)"
-          echo "=== flag5 구조체 멤버 (115 비트) ==="
-          grep -n "flag5" tasmota/include/tasmota_types.h 2>/dev/null | head -30 || echo "(없음)"
-          echo "=== P115 / SetOption115 코드 처리 ==="
-          grep -rn "115" tasmota/xsns_62*.ino 2>/dev/null | grep -iE "option|flag5|enable|MasterEnable|115" | head -20 || echo "(없음)"
-          echo "=== xsns_62 파일명 확인 ==="
-          ls tasmota/ | grep -iE "xsns_62|mi" || true
+          F=tasmota/tasmota_xdrv_driver/xdrv_79_esp32_ble.ino
+          echo "=== 파일 내 USE_MI_EXT_GUI / USE_BLE_ESP32 전처리 분기 ==="
+          grep -n "USE_MI_EXT_GUI\|USE_BLE_ESP32\|#ifdef\|#ifndef\|#endif\|#else" "$F" | sed -n '1,60p'
