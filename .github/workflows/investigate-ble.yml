@@ -1,4 +1,4 @@
-name: Investigate Tasmota BLE complete
+name: Investigate ble-page guard and SetOption115
 
 on:
   workflow_dispatch:
@@ -13,40 +13,26 @@ jobs:
           repository: arendst/Tasmota
           ref: v14.6.0
 
-      - name: 1. Include order of config headers
+      - name: Q1 - real /ble handler source + guard
         run: |
-          echo "=== configurations.h 가 ESP32.h 를 include 하는가 ==="
-          grep -n "tasmota_configurations_ESP32" tasmota/include/tasmota_configurations.h || true
-          echo "=== 두 헤더 include 위치 ==="
-          grep -rn "tasmota_configurations.h\|tasmota_configurations_ESP32.h" tasmota/tasmota.h tasmota/include/tasmota_post.h 2>/dev/null || true
-          grep -rln "include.*tasmota_configurations" tasmota/ 2>/dev/null | head -10 || true
+          echo "=== D_BLE_DEVICES / D_BLE_ENABLE 사용 .ino 파일 ==="
+          grep -rln "D_BLE_DEVICES\|D_BLE_ENABLE" tasmota/*.ino 2>/dev/null || echo "(없음)"
+          for f in $(grep -rln "D_BLE_DEVICES\|D_BLE_ENABLE" tasmota/*.ino 2>/dev/null); do
+            echo "######## $f ########"
+            grep -n "USE_MI_EXT_GUI\|USE_MI_ESP32\|USE_BLE_ESP32\|#ifdef\|#ifndef\|#else\|#endif\|\"ble\"\|/ble\|D_BLE_DEVICES\|D_BLE_ENABLE\|WebServer\|On(\"" "$f" | head -40
+          done
 
-      - name: 2. ALL USE_EQ3_ESP32 locations
+      - name: Q2 - USE_MI_EXT_GUI all references
         run: |
-          echo "=== ESP32.h ==="
-          grep -n "USE_EQ3_ESP32" tasmota/include/tasmota_configurations_ESP32.h || true
-          echo "=== configurations.h ==="
-          grep -n "USE_EQ3_ESP32" tasmota/include/tasmota_configurations.h || echo "(없음)"
+          grep -rn "USE_MI_EXT_GUI" tasmota/ 2>/dev/null | head -30 || echo "(USE_MI_EXT_GUI 참조 없음)"
 
-      - name: 3. USE_MI_EXT_GUI any definition
+      - name: Q3 - SetOption115 define and flag mapping
         run: |
-          grep -rn "define USE_MI_EXT_GUI\|undef USE_MI_EXT_GUI" tasmota/ 2>/dev/null || echo "(USE_MI_EXT_GUI 정의 없음 - 기본 미정의, 정상)"
-
-      - name: 4. configurations.h 850~945 firmware context
-        run: |
-          sed -n '850,945p' tasmota/include/tasmota_configurations.h | grep -n "#ifdef\|#ifndef\|#endif\|#elif\|FIRMWARE_\|undef USE_BLE_ESP32\|undef USE_MI_ESP32\|undef USE_ZIGBEE\|undef USE_TCP_BRIDGE" || true
-
-      - name: 5. ESP32.h undef block context
-        run: |
-          echo "=== line 120~140 ==="
-          sed -n '120,140p' tasmota/include/tasmota_configurations_ESP32.h
-          echo "=== line 235~250 ==="
-          sed -n '235,250p' tasmota/include/tasmota_configurations_ESP32.h
-
-      - name: 6. NimBLE library presence
-        run: |
-          echo "=== NimBLEDevice.h 위치 ==="
-          find lib/ -name "NimBLEDevice.h" 2>/dev/null || echo "(lib/ 내 없음)"
-          echo "=== libesp32 BLE 관련 ==="
-          ls lib/libesp32/ 2>/dev/null | grep -i "ble\|nimble\|mi32\|eq3" || echo "(libesp32 내 BLE 디렉토리명 없음)"
-          ls lib/libesp32_div/ 2>/dev/null | grep -i "ble\|nimble\|mi32\|eq3" || echo "(libesp32_div 내 BLE 디렉토리명 없음)"
+          echo "=== my_user_config.h 의 [SetOption115] 라인 ==="
+          grep -n "SetOption115\|\[SetOption11[0-9]\]" tasmota/my_user_config.h 2>/dev/null || echo "(my_user_config.h 에 SetOption115 명시 default 없음)"
+          echo "=== flag5 구조체 멤버 (115 비트) ==="
+          grep -n "flag5" tasmota/include/tasmota_types.h 2>/dev/null | head -30 || echo "(없음)"
+          echo "=== P115 / SetOption115 코드 처리 ==="
+          grep -rn "115" tasmota/xsns_62*.ino 2>/dev/null | grep -iE "option|flag5|enable|MasterEnable|115" | head -20 || echo "(없음)"
+          echo "=== xsns_62 파일명 확인 ==="
+          ls tasmota/ | grep -iE "xsns_62|mi" || true
