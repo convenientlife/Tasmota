@@ -1,10 +1,10 @@
-name: Locate /ble handler guard in xdrv_79
+name: Verify defines in Tasmota v14.6.0
 
 on:
   workflow_dispatch:
 
 jobs:
-  investigate:
+  verify:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -12,20 +12,18 @@ jobs:
           repository: arendst/Tasmota
           ref: v14.6.0
 
-      - name: xdrv_79 /ble registration guard context
+      - name: Check USE_BLE_DISPLAY / USE_BLE_NATIVE existence
         run: |
-          F=tasmota/tasmota_xdrv_driver/xdrv_79_esp32_ble.ino
-          echo "=== 3560~3760 (HTTP_FORM_BLE ~ WebServer_on 등록부) ==="
-          sed -n '3560,3760p' "$F"
+          echo "=== USE_BLE_DISPLAY ==="
+          grep -rn "USE_BLE_DISPLAY" tasmota/ 2>/dev/null || echo "→ Tasmota 소스에 없음. cargo-cult code 확정."
 
-      - name: FUNC_WEB_ADD_HANDLER / ifdef context around 3743
-        run: |
-          F=tasmota/tasmota_xdrv_driver/xdrv_79_esp32_ble.ino
-          echo "=== 3700~3760 라인 + #ifdef/#if/case 컨텍스트 ==="
-          awk 'NR>=3000 && NR<=3760 && (/#ifdef|#ifndef|#if |#else|#endif|FUNC_WEB|case |WebServer_on|HandleBleConfiguration|WEB_HANDLE_BLE/) {print NR": "$0}' "$F"
+          echo ""
+          echo "=== USE_BLE_NATIVE ==="
+          grep -rn "USE_BLE_NATIVE" tasmota/ 2>/dev/null || echo "→ Tasmota 소스에 없음. cargo-cult code 확정."
 
-      - name: USE_ guards wrapping the web config block
-        run: |
-          F=tasmota/tasmota_xdrv_driver/xdrv_79_esp32_ble.ino
-          echo "=== 파일 내 USE_MI_EXT_GUI / USE_BLE_ESP32 전처리 분기 ==="
-          grep -n "USE_MI_EXT_GUI\|USE_BLE_ESP32\|#ifdef\|#ifndef\|#endif\|#else" "$F" | sed -n '1,60p'
+          echo ""
+          echo "=== 비교: 검증된 defines (참조용) ==="
+          for D in USE_BLE_ESP32 USE_MI_ESP32 USE_MI_EXT_GUI USE_EQ3_ESP32 BLE_ESP32_ENABLE WEB_HANDLE_BLE; do
+            COUNT=$(grep -rn "$D" tasmota/ 2>/dev/null | wc -l)
+            echo "$D: $COUNT 곳에서 참조됨"
+          done
