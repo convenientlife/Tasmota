@@ -1,4 +1,4 @@
-name: Build FINAL - v1 + /ble race fix
+name: Build FINAL - v1 + /ble race fix & Display
 
 on:
   workflow_dispatch:
@@ -42,19 +42,28 @@ jobs:
           sed -i '/^#endif[[:space:]]*\/\/[[:space:]]*FIRMWARE_BLUETOOTH/i #define USE_ZIGBEE_EZSP' tasmota/include/tasmota_configurations_ESP32.h
           sed -i '/^#endif[[:space:]]*\/\/[[:space:]]*FIRMWARE_BLUETOOTH/i #define USE_TCP_BRIDGE' tasmota/include/tasmota_configurations_ESP32.h
 
-      - name: Inject ZB-GW03 config (Ethernet + SetOption115 + footer)
+      - name: Inject ZB-GW03 config (Ethernet + Web BLE Display + Custom Footer)
         run: |
           cat > tasmota/user_config_override.h << 'EOF'
           #ifndef _USER_CONFIG_OVERRIDE_H_
           #define _USER_CONFIG_OVERRIDE_H_
+          
+          // --- Zigbee 기본 및 TCP Bridge ---
           #define USE_ZIGBEE_EEPROM
           #define USE_ZIGBEE_CHANNEL 11
+          
+          // --- ZB-GW03 하드웨어 이더넷 설정 ---
           #define USE_ETHERNET
           #define ETH_TYPE 0
           #define ETH_CLKMODE 3
           #undef  ETH_ADDRESS
           #define ETH_ADDRESS 1
-          #define BLE_ESP32_ENABLE true
+          
+          // --- 오리지널 내장 /ble 웹페이지 및 센서 파싱 활성화 ---
+          #define USE_BLE_DISPLAY       // 외부 파일 없이 Tasmota 내장 원시 웹화면 생성
+          #define USE_BLE_NATIVE        // 수집된 센서 데이터를 시각화 기기에 매칭
+          
+          // --- 커스텀 이미지 문구 설정 ---
           #undef  CODE_IMAGE_STR
           #define CODE_IMAGE_STR "tcp bridge and bluetooth"
           #endif
@@ -64,14 +73,18 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.x'
+
       - name: Install PlatformIO
         run: pip install platformio
+
       - name: Build tasmota32-bluetooth
         run: platformio run -e tasmota32-bluetooth
+
       - name: Check firmware size
         run: |
           SIZE=$(stat -c%s build_output/firmware/tasmota32-bluetooth.bin)
           echo "Binary size: $SIZE bytes ($(( SIZE / 1024 )) KB) / v1=1847"
+
       - uses: actions/upload-artifact@v4
         with:
           name: tasmota32-zb-gw03-final-blefix
