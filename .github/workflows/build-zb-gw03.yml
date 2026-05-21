@@ -1,4 +1,4 @@
-name: Build FINAL - v1 + /ble race fix & Display
+name: Build FINAL clean+mute - awk + zigbee + footer + NoKey mute
 
 on:
   workflow_dispatch:
@@ -14,7 +14,16 @@ jobs:
           repository: arendst/Tasmota
           ref: v14.6.0
 
-      - name: Patch xdrv_79 - register /ble handler before BLEInitState early-return
+      - name: Mute "No Key found" (xsns_62_esp32_mi_ble.ino:1262)
+        run: |
+          F=tasmota/tasmota_xsns_sensor/xsns_62_esp32_mi_ble.ino
+          echo "=== 패치 전 ==="
+          grep -n "No Key found" "$F"
+          sed -i '/AddLog.*No Key found/s|^|// |' "$F"
+          echo "=== 패치 후 (// 로 시작해야 정상) ==="
+          grep -n "No Key found" "$F"
+
+      - name: Patch xdrv_79 - /ble handler before BLEInitState early-return
         run: |
           F=tasmota/tasmota_xdrv_driver/xdrv_79_esp32_ble.ino
           awk '
@@ -28,7 +37,7 @@ jobs:
           }
           {print}
           ' "$F" > "$F.new" && mv "$F.new" "$F"
-          echo "=== 패치 검증 (Xdrv79 함수 시작~switch) ==="
+          echo "=== /ble race fix 검증 ==="
           awk '/bool Xdrv79\(uint32_t function\)/,/switch \(function\) \{/' "$F"
 
       - name: Switch Zigbee protocol ZNP -> EZSP
@@ -42,32 +51,34 @@ jobs:
           sed -i '/^#endif[[:space:]]*\/\/[[:space:]]*FIRMWARE_BLUETOOTH/i #define USE_ZIGBEE_EZSP' tasmota/include/tasmota_configurations_ESP32.h
           sed -i '/^#endif[[:space:]]*\/\/[[:space:]]*FIRMWARE_BLUETOOTH/i #define USE_TCP_BRIDGE' tasmota/include/tasmota_configurations_ESP32.h
 
-      - name: Inject ZB-GW03 config (Ethernet + Web BLE Display + Custom Footer)
+      - name: Inject ZB-GW03 config (cleaned)
         run: |
           cat > tasmota/user_config_override.h << 'EOF'
           #ifndef _USER_CONFIG_OVERRIDE_H_
           #define _USER_CONFIG_OVERRIDE_H_
-          
-          // --- Zigbee 기본 및 TCP Bridge ---
+
+          // --- Zigbee 기본 (TCP Bridge는 FIRMWARE_BLUETOOTH 섹션에 sed 주입됨) ---
           #define USE_ZIGBEE_EEPROM
           #define USE_ZIGBEE_CHANNEL 11
-          
-          // --- ZB-GW03 하드웨어 이더넷 설정 ---
+
+          // --- ZB-GW03 하드웨어 이더넷 설정 (필수) ---
           #define USE_ETHERNET
           #define ETH_TYPE 0
           #define ETH_CLKMODE 3
           #undef  ETH_ADDRESS
           #define ETH_ADDRESS 1
-          
-          // --- 오리지널 내장 /ble 웹페이지 및 센서 파싱 활성화 ---
-          #define USE_BLE_DISPLAY       // 외부 파일 없이 Tasmota 내장 원시 웹화면 생성
-          #define USE_BLE_NATIVE        // 수집된 센서 데이터를 시각화 기기에 매칭
-          
-          // --- 커스텀 이미지 문구 설정 ---
+
+          // --- SetOption115 기본 ON (신규 유닛 BLE 마스터 자동 활성) ---
+          #define BLE_ESP32_ENABLE true
+
+          // --- 커스텀 펌웨어 표기 ---
           #undef  CODE_IMAGE_STR
           #define CODE_IMAGE_STR "tcp bridge and bluetooth"
+
           #endif
           EOF
+          echo "=== user_config_override.h 확인 ==="
+          cat tasmota/user_config_override.h
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -83,11 +94,12 @@ jobs:
       - name: Check firmware size
         run: |
           SIZE=$(stat -c%s build_output/firmware/tasmota32-bluetooth.bin)
-          echo "Binary size: $SIZE bytes ($(( SIZE / 1024 )) KB) / v1=1847"
+          echo "Binary size: $SIZE bytes ($(( SIZE / 1024 )) KB)"
+          echo "이전 동작본 약 1847 KB. 비슷해야 정상."
 
       - uses: actions/upload-artifact@v4
         with:
-          name: tasmota32-zb-gw03-final-blefix
+          name: tasmota32-zb-gw03-final-clean-mute
           path: |
             build_output/firmware/tasmota32-bluetooth.bin
             build_output/firmware/tasmota32-bluetooth.factory.bin
