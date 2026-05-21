@@ -1,10 +1,10 @@
-name: Verify defines in Tasmota v14.6.0
+name: Locate "No Key found" in Tasmota source
 
 on:
   workflow_dispatch:
 
 jobs:
-  verify:
+  locate:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -12,18 +12,18 @@ jobs:
           repository: arendst/Tasmota
           ref: v14.6.0
 
-      - name: Check USE_BLE_DISPLAY / USE_BLE_NATIVE existence
+      - name: Find "No Key found" everywhere
         run: |
-          echo "=== USE_BLE_DISPLAY ==="
-          grep -rn "USE_BLE_DISPLAY" tasmota/ 2>/dev/null || echo "→ Tasmota 소스에 없음. cargo-cult code 확정."
+          echo "=== 'No Key found' 모든 발생 위치 ==="
+          grep -rn "No Key found" tasmota/ 2>/dev/null || echo "(매칭 없음)"
 
           echo ""
-          echo "=== USE_BLE_NATIVE ==="
-          grep -rn "USE_BLE_NATIVE" tasmota/ 2>/dev/null || echo "→ Tasmota 소스에 없음. cargo-cult code 확정."
-
-          echo ""
-          echo "=== 비교: 검증된 defines (참조용) ==="
-          for D in USE_BLE_ESP32 USE_MI_ESP32 USE_MI_EXT_GUI USE_EQ3_ESP32 BLE_ESP32_ENABLE WEB_HANDLE_BLE; do
-            COUNT=$(grep -rn "$D" tasmota/ 2>/dev/null | wc -l)
-            echo "$D: $COUNT 곳에서 참조됨"
+          echo "=== 파일별 출현 횟수 ==="
+          grep -rl "No Key found" tasmota/ 2>/dev/null | while read f; do
+            COUNT=$(grep -c "No Key found" "$f")
+            echo "$COUNT 회: $f"
           done
+
+          echo ""
+          echo "=== 발생 라인의 전후 context (각 매칭 ±2줄) ==="
+          grep -rn -B 2 -A 2 "No Key found" tasmota/ 2>/dev/null || true
