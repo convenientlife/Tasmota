@@ -1,4 +1,4 @@
-name: Investigate MQTT TLS in Tasmota v14.6.0
+name: Investigate Tasmota TLS library
 
 on:
   workflow_dispatch:
@@ -12,42 +12,25 @@ jobs:
           repository: arendst/Tasmota
           ref: v14.6.0
 
-      - name: Q1 — MQTT TLS 관련 모든 defines
+      - name: Q1 — BearSSL vs mbedTLS 사용 여부
         run: |
-          echo "=== USE_MQTT_TLS 계열 defines 사용처 ==="
-          for D in USE_MQTT_TLS USE_MQTT_TLS_CA_CERT USE_MQTT_TLS_FORCE_EC_CIPHER USE_MQTT_AWS_IOT USE_MQTT_AWS_IOT_LIGHT MQTT_FINGERPRINT MQTT_TLS_ENABLED USE_MQTT_TLS_DROP_OLD_FINGERPRINT; do
-            COUNT=$(grep -rn "$D" tasmota/ 2>/dev/null | wc -l)
-            echo "--- $D ($COUNT 곳) ---"
-            grep -rn "$D" tasmota/ 2>/dev/null | head -3 || true
-          done
+          echo "=== BearSSL 참조 ==="
+          grep -rn "BearSSL\|bearssl\|t_xdrv_02_9_mqtt\|WiFiClientSecure_light" tasmota/tasmota_xdrv_driver/xdrv_02_9_mqtt.ino 2>/dev/null | head -20
 
-      - name: Q2 — my_user_config.h 의 MQTT TLS 기본 정의/주석
+      - name: Q2 — TLS buffer size 정의
         run: |
-          echo "=== my_user_config.h MQTT/TLS 관련 ==="
-          grep -n "MQTT_TLS\|MqttFingerprint\|MQTT.*PORT\|MQTT_PORT\|MQTT_USER\|MQTT_PASS" tasmota/my_user_config.h | head -30
+          echo "=== TLS_INSECURE / TLS_CA / MBEDTLS / SSL_BUFFER ==="
+          grep -rn "MBEDTLS_SSL_IN_CONTENT_LEN\|MBEDTLS_SSL_OUT_CONTENT_LEN\|tls_in_content\|tls_out_content\|TLS_BUFFER" tasmota/ 2>/dev/null | head -20
 
-      - name: Q3 — TLS 인증서/CA 처리 코드 위치
+      - name: Q3 — Tasmota TLS 에러 코드 -1002 매핑
         run: |
-          echo "=== CA cert / fingerprint 처리 파일 ==="
-          grep -rln "MqttFingerprint\|AWS_IoT_Private_Key\|tls_ca_cert\|TasmotaGlobal_TLS\|BearSSL" tasmota/ 2>/dev/null | head -10
+          echo "=== TLS connection error 출력 위치 ==="
+          grep -rn "TLS connection error" tasmota/ 2>/dev/null | head -10
 
-      - name: Q4 — user_config_override 샘플의 TLS 설정 예
+      - name: Q4 — Mosquitto 호환 cipher 정의
         run: |
-          echo "=== platformio_override_sample.ini 의 TLS 설정 ==="
-          grep -A 3 "TLS\|tls" platformio_override_sample.ini 2>/dev/null | head -30 || true
+          echo "=== 지원하는 cipher 명시 ==="
+          grep -rn "TLS_CIPHER\|cipher_suite\|SUPPORTED_CIPHER" tasmota/ 2>/dev/null | head -20
           echo ""
-          echo "=== 다른 샘플 ==="
-          find . -maxdepth 2 -name "*sample*" -o -name "*example*" 2>/dev/null | head -10
-
-      - name: Q5 — fingerprint 명령/설정
-        run: |
-          echo "=== MqttFingerprint 명령 처리 ==="
-          grep -rn "MqttFingerprint" tasmota/ 2>/dev/null | head -10
-          echo ""
-          echo "=== 기본 fingerprint 값 ==="
-          grep -rn "MQTT_FINGERPRINT1\|MQTT_FINGERPRINT2" tasmota/ 2>/dev/null | head -10
-
-      - name: Q6 — TLS 인증 모드 (CA / Fingerprint / 검증생략)
-        run: |
-          echo "=== USE_MQTT_TLS 주변 ifdef 트리 ==="
-          grep -B 1 -A 5 "USE_MQTT_TLS_CA_CERT\|MQTT_TLS_ENABLED" tasmota/include/tasmota.h tasmota/my_user_config.h 2>/dev/null | head -40 || true
+          echo "=== bear_ssl 헤더 ==="
+          find lib/ -name "bear*.h" -o -name "BearSSL*.h" 2>/dev/null | head -10
