@@ -1,0 +1,30 @@
+name: Investigate SetOption118 build default
+
+on:
+  workflow_dispatch:
+
+jobs:
+  investigate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: arendst/Tasmota
+          ref: v14.6.0
+
+      - name: SetOption118 매핑 및 default
+        run: |
+          echo "=== SetOption118 / zigbee_distinct_topics 모든 참조 ==="
+          grep -rn "SetOption118\|zigbee_distinct_topics\|ZIGBEE_DISTINCT_TOPICS\|\[SetOption118\]" tasmota/ | head -30
+
+      - name: my_user_config.h 의 SetOption118 default
+        run: |
+          grep -n "SetOption118\|ZIGBEE_DISTINCT_TOPICS\|ZIGBEE_TOPIC_FNAME" tasmota/my_user_config.h
+
+      - name: FIRMWARE_BLUETOOTH 가 SO118 관련 default 건드리는지
+        run: |
+          sed -n '251,285p' tasmota/include/tasmota_configurations_ESP32.h | grep -E "ZIGBEE|SetOption|distinct"
+
+      - name: USE_TASMOTA_DISCOVERY 가 Zigbee 출력 형식에 영향 주는지
+        run: |
+          grep -rn "USE_TASMOTA_DISCOVERY" tasmota/ | grep -iE "zigbee\|zb_recv" | head -10
