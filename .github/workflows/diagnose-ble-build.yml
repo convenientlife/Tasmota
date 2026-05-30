@@ -30,7 +30,7 @@ jobs:
           grep -n "USE_MI_EXT_GUI" "$F" || echo "없음"
 
       # ── 2. sed 패치 적용 ──────────────────────────────────────
-      - name: "[3] ZNP→EZSP 전환 (my_user_config.h)"
+      - name: "[3] ZNP->EZSP 전환 (my_user_config.h)"
         run: |
           sed -i 's|^[[:space:]]*#define USE_ZIGBEE_ZNP|//&|' tasmota/my_user_config.h
           sed -i 's|^[[:space:]]*//[[:space:]]*#define USE_ZIGBEE_EZSP|#define USE_ZIGBEE_EZSP|' tasmota/my_user_config.h
@@ -51,53 +51,56 @@ jobs:
 
       - name: "[5] user_config_override.h 생성"
         run: |
-          cat > tasmota/user_config_override.h << 'EOF'
-#ifndef _USER_CONFIG_OVERRIDE_H_
-#define _USER_CONFIG_OVERRIDE_H_
-
-#define USE_ZIGBEE_EEPROM
-#define USE_ZIGBEE_CHANNEL 11
-
-#define USE_ETHERNET
-#define ETH_TYPE 0
-#define ETH_CLKMODE 3
-#undef  ETH_ADDRESS
-#define ETH_ADDRESS 1
-
-#define BLE_ESP32_ENABLE true
-
-#undef  CODE_IMAGE_STR
-#define CODE_IMAGE_STR "tcp bridge and bluetooth"
-
-#endif
-EOF
+          python3 -c "
+          lines = [
+            '#ifndef _USER_CONFIG_OVERRIDE_H_',
+            '#define _USER_CONFIG_OVERRIDE_H_',
+            '',
+            '#define USE_ZIGBEE_EEPROM',
+            '#define USE_ZIGBEE_CHANNEL 11',
+            '',
+            '#define USE_ETHERNET',
+            '#define ETH_TYPE 0',
+            '#define ETH_CLKMODE 3',
+            '#undef  ETH_ADDRESS',
+            '#define ETH_ADDRESS 1',
+            '',
+            '#define BLE_ESP32_ENABLE true',
+            '',
+            '#undef  CODE_IMAGE_STR',
+            '#define CODE_IMAGE_STR \"tcp bridge and bluetooth\"',
+            '',
+            '#endif',
+          ]
+          open('tasmota/user_config_override.h', 'w').write('\n'.join(lines) + '\n')
+          "
           echo "=== user_config_override.h 내용 ==="
-          cat -A tasmota/user_config_override.h
+          cat tasmota/user_config_override.h
 
       # ── 3. 패치 후 최종 상태 확인 ────────────────────────────
       - name: "[6] 패치 후 USE_BLE_ESP32 활성 여부 (핵심)"
         run: |
           F=tasmota/include/tasmota_configurations_ESP32.h
           echo "=== USE_BLE_ESP32 define 위치 ==="
-          grep -n "USE_BLE_ESP32" "$F" || echo "❌ USE_BLE_ESP32 없음"
+          grep -n "USE_BLE_ESP32" "$F" || echo "USE_BLE_ESP32 없음"
           echo ""
-          echo "=== USE_MI_EXT_GUI 위치 (있으면 BLE 차단됨) ==="
-          grep -n "USE_MI_EXT_GUI" "$F" || echo "✅ USE_MI_EXT_GUI 없음 (정상)"
+          echo "=== USE_MI_EXT_GUI 위치 (있으면 BLE 차단) ==="
+          grep -n "USE_MI_EXT_GUI" "$F" || echo "USE_MI_EXT_GUI 없음 (정상)"
           echo ""
-          echo "=== ifndef USE_MI_EXT_GUI 블록 (BLE_ESP32 포함 여부) ==="
+          echo "=== ifndef USE_MI_EXT_GUI 블록 ==="
           awk '/ifndef USE_MI_EXT_GUI/,/endif.*USE_MI_EXT_GUI/' "$F" | head -20
 
-      - name: "[7] xdrv_79_esp32_ble.ino 존재 및 USE_BLE_ESP32 가드 확인"
+      - name: "[7] xdrv_79_esp32_ble.ino 존재 및 Berry 모듈 등록 확인"
         run: |
           F=tasmota/tasmota_xdrv_driver/xdrv_79_esp32_ble.ino
-          echo "=== 파일 존재: ==="
-          ls -lh "$F" || echo "❌ 파일 없음"
+          echo "=== 파일 크기 ==="
+          ls -lh "$F" || echo "파일 없음"
           echo ""
           echo "=== 상단 USE_BLE_ESP32 가드 ==="
           head -20 "$F"
           echo ""
           echo "=== Berry 모듈 등록 코드 ==="
-          grep -n "BLE\|be_module\|berry" "$F" | head -20
+          grep -n "be_module\|BLE.*berry\|berry.*BLE\|be_BLE" "$F" | head -20 || echo "없음"
 
       - name: "[8] awk 패치 (xdrv_79) 적용 및 검증"
         run: |
@@ -116,7 +119,7 @@ EOF
           echo "=== Xdrv79 함수 앞부분 (패치 확인) ==="
           awk '/bool Xdrv79\(uint32_t function\)/,/switch \(function\) \{/' "$F"
 
-      # ── 4. 컴파일 테스트 (선택) ───────────────────────────────
+      # ── 4. 컴파일 ─────────────────────────────────────────────
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -125,27 +128,31 @@ EOF
       - name: Install PlatformIO
         run: pip install platformio
 
-      - name: "[9] 실제 컴파일 (tasmota32-bluetooth)"
+      - name: "[9] 컴파일 (tasmota32-bluetooth)"
         run: platformio run -e tasmota32-bluetooth 2>&1 | tee build.log
 
       - name: "[10] 컴파일 결과 분석"
         run: |
-          echo "=== 바이너리 크기 ==="
-          stat -c "%s bytes (%s / 1024 = $(( $(stat -c%s build_output/firmware/tasmota32-bluetooth.bin) / 1024 )) KB)" \
-            build_output/firmware/tasmota32-bluetooth.bin 2>/dev/null || echo "바이너리 없음 (빌드 실패)"
-
+          BIN=build_output/firmware/tasmota32-bluetooth.bin
+          if [ -f "$BIN" ]; then
+            SIZE=$(stat -c%s "$BIN")
+            echo "Binary size: $SIZE bytes ($(( SIZE / 1024 )) KB)"
+            echo "이전 동작본 약 1847 KB. 비슷해야 정상."
+          else
+            echo "바이너리 없음 (빌드 실패)"
+          fi
           echo ""
           echo "=== xdrv_79 컴파일 포함 여부 ==="
           grep -i "xdrv_79\|ble_esp32\|nimble" build.log | head -10 || echo "관련 로그 없음"
-
           echo ""
-          echo "=== 경고/에러 요약 ==="
-          grep -i "error\|warning.*BLE\|warning.*bluetooth" build.log | head -20 || echo "없음"
+          echo "=== 에러/경고 요약 ==="
+          grep -i "^.*error:" build.log | head -20 || echo "에러 없음"
 
       - uses: actions/upload-artifact@v4
         with:
           name: diagnose-output
           path: |
             build_output/firmware/tasmota32-bluetooth.bin
+            build_output/firmware/tasmota32-bluetooth.factory.bin
             build.log
           retention-days: 3
