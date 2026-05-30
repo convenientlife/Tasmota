@@ -12,65 +12,35 @@ jobs:
           repository: arendst/Tasmota
           ref: v14.6.0
 
-      - name: "[1] be_modtab_tasmota.c - BLE/MI32 관련 전체 내용"
+      - name: "[0] 실제 파일 위치 탐색"
         run: |
-          F=lib/libesp32/berry_tasmota/be_modtab_tasmota.c
-          echo "=== 파일 존재 확인 ==="
-          ls -lh "$F" || echo "파일 없음"
-          echo ""
-          echo "=== 전체 내용 ==="
-          cat "$F"
+          echo "=== be_modtab_tasmota.c 위치 ==="
+          find . -name "be_modtab_tasmota.c" 2>/dev/null | grep -v ".git"
 
-      - name: "[2] be_MI32_lib.c - 등록하는 모듈명 확인"
-        run: |
-          F=lib/libesp32/berry_tasmota/be_MI32_lib.c
-          echo "=== 파일 존재 확인 ==="
-          ls -lh "$F" || echo "파일 없음"
           echo ""
-          echo "=== 상단 100줄 ==="
-          head -100 "$F"
-          echo ""
-          echo "=== BLE/MI32 모듈명 등록 부분 ==="
-          grep -n "be_module\|module_name\|\"BLE\"\|\"MI32\"\|be_define\|be_native" "$F" | head -30
+          echo "=== be_MI32_lib.c 위치 ==="
+          find . -name "be_MI32_lib.c" 2>/dev/null | grep -v ".git"
 
-      - name: "[3] Berry BLE 모듈 관련 파일 목록"
-        run: |
-          echo "=== berry_tasmota 폴더 전체 파일 ==="
-          ls -la lib/libesp32/berry_tasmota/
           echo ""
-          echo "=== BLE 관련 파일 ==="
-          find . -name "*BLE*" -o -name "*ble*" | grep -v ".git\|.pio" | sort
-          echo ""
-          echo "=== MI32 관련 파일 ==="
-          find . -name "*MI32*" -o -name "*mi32*" | grep -v ".git\|.pio" | sort
+          echo "=== berry_tasmota 폴더 위치 ==="
+          find . -type d -name "berry_tasmota" 2>/dev/null | grep -v ".git"
 
-      - name: "[4] platformio.ini - tasmota32-bluetooth 환경 정의"
-        run: |
-          echo "=== platformio.ini 에서 bluetooth 관련 ==="
-          grep -A 20 "tasmota32-bluetooth" platformio.ini | head -40
           echo ""
-          echo "=== common 섹션 ==="
-          grep -A 10 "^\[common\]" platformio.ini | head -15
-          echo ""
-          echo "=== build_flags 전달 방식 ==="
-          grep "build_flags\|extends\|tasmota32_base" platformio.ini | head -20
+          echo "=== lib 폴더 구조 (2단계) ==="
+          find . -maxdepth 3 -type d | grep -v ".git\|.pio" | sort
 
-      - name: "[5] be_modtab_tasmota.c 가 include하는 헤더 확인"
-        run: |
-          F=lib/libesp32/berry_tasmota/be_modtab_tasmota.c
-          echo "=== include 목록 ==="
-          grep "#include" "$F"
           echo ""
-          echo "=== USE_ 조건부 컴파일 블록 ==="
-          grep -n "ifdef\|ifndef\|endif" "$F"
+          echo "=== BLE 관련 .c/.h 파일 전체 ==="
+          find . -name "*BLE*" -o -name "*ble_esp32*" | grep -v ".git" | sort
 
-      - name: "[6] tasmota32-bluetooth 환경의 실제 build_flags 확인"
+          echo ""
+          echo "=== MI32 관련 .c/.h 파일 ==="
+          find . -name "*MI32*" | grep -v ".git" | sort
+
+      - name: "[1] platformio 환경 파일 목록"
         run: |
-          echo "=== platformio_tasmota_cenv.ini ==="
-          cat platformio_tasmota_cenv.ini 2>/dev/null || echo "파일 없음"
+          echo "=== 루트의 .ini 파일 ==="
+          ls *.ini 2>/dev/null || echo "없음"
           echo ""
-          echo "=== platformio_tasmota_env32.ini ==="
-          grep -A 30 "tasmota32-bluetooth" platformio_tasmota_env32.ini 2>/dev/null || echo "파일 없음"
-          echo ""
-          echo "=== 모든 .ini 파일 목록 ==="
-          ls *.ini 2>/dev/null
+          echo "=== tasmota32-bluetooth 환경 정의 위치 ==="
+          grep -rn "tasmota32-bluetooth" *.ini 2>/dev/null | head -20
