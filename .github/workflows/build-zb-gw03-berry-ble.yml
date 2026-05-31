@@ -56,6 +56,17 @@ jobs:
           echo "생성된 BLE/MI32 파일:"
           ls generate/ | grep -E "BLE|MI32"
 
+      # ── 4-a. [핵심] be_modtab.c 모듈 테이블 등록 조건 수정 ────────
+      - name: Patch be_modtab.c - register BLE/MI32 even when USE_BLE_ESP32 defined
+        run: |
+          F=lib/libesp32/berry/default/be_modtab.c
+          echo "=== 패치 전 ==="
+          grep -n "USE_MI_ESP32\|USE_BLE_ESP32\|MI32\|BLE" "$F" | grep -A2 -B2 "BLE_ESP32"
+          sed -i 's/#if defined(USE_MI_ESP32) && !defined(USE_BLE_ESP32)/#if defined(USE_MI_ESP32)/' "$F"
+          echo "=== 패치 후 ==="
+          grep -n "USE_MI_ESP32\|native_module(MI32)\|native_module(BLE)" "$F"
+
+      # ── 4-b. Berry BLE 구현 추가 (USE_BLE_ESP32 케이스) ──────────
       # ── 4. [핵심] Berry BLE 구현 추가 (USE_BLE_ESP32 케이스) ─────
       - name: Patch xdrv_52_3_berry_MI32.ino - add BLE impl for USE_BLE_ESP32 case
         run: |
