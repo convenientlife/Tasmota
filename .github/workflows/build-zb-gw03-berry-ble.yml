@@ -14,25 +14,7 @@ jobs:
           repository: arendst/Tasmota
           ref: v14.6.0
 
-      # ── 1. No Key Found 콘솔 차단 및 MI32 드라이버 빌드 방해 조건문 완전 소멸 ──
-      - name: Mute No Key Found & Force Compile MI32 Driver
-        run: |
-          F=tasmota/tasmota_xsns_sensor/xsns_62_esp32_mi_ble.ino
-          
-          # No Key Found 로그 주석 처리
-          sed -i '/AddLog.*No Key found/s|^|// |' "$F"
-          
-          echo "=== 패치 전 상단 조건문 ==="
-          head -n 25 "$F" | grep "USE_MI_ESP32" || true
-          
-          # [★핵심 변경] 파일 전체에서 USE_BLE_ESP32가 켜져 있을 때 컴파일을 막는 상호 배제 조건문을 전부 지워버림
-          sed -i 's/&& !defined(USE_BLE_ESP32)//g' "$F"
-          sed -i 's/&& !defined(USE_BLE_ADAPTER)//g' "$F"
-          
-          echo "=== 패치 후 상단 조건문 ==="
-          head -n 25 "$F" | grep "USE_MI_ESP32" || true
-
-      # ── 2. /ble 웹페이지 race condition 수정 ─────────────────
+      # ── 1. /ble 웹페이지 race condition 수정 ─────────────────
       - name: Patch xdrv_79 - /ble handler before BLEInitState early-return
         run: |
           F=tasmota/tasmota_xdrv_driver/xdrv_79_esp32_ble.ino
@@ -47,95 +29,14 @@ jobs:
           }
           {print}
           ' "$F" > "$F.new" && mv "$F.new" "$F"
-          echo "패치 확인:"
-          awk '/bool Xdrv79\(uint32_t function\)/,/switch \(function\) \{/' "$F"
 
-      # ── 3. Berry BLE/MI32 구조체 생성 (coc 실행) ──────
-      - name: Generate Berry BLE/MI32 structures via coc
-        run: |
-          mkdir -p lib/libesp32/berry/generate
-          cd lib/libesp32/berry
-          python3 tools/coc/coc -o generate src default \
-            ../berry_tasmota/src \
-            ../berry_matter/src/solidify \
-            ../berry_matter/src \
-            ../berry_tasmota/src/solidify \
-            ../berry_mapping/src \
-            ../berry_int64/src \
-            -c default/berry_conf.h
-          echo "생성된 BLE/MI32 파일:"
-          ls generate/ | grep -E "BLE|MI32"
-
-      # ── 4-a. be_modtab.c 모듈 테이블 등록 조건 수정 ────────
-      - name: Patch be_modtab.c - register BLE/MI32 even when USE_BLE_ESP32 defined
-        run: |
-          F=lib/libesp32/berry/default/be_modtab.c
-          echo "=== 패치 전 ==="
-          grep -n "USE_MI_ESP32\|USE_BLE_ESP32\|MI32\|BLE" "$F" | grep -A2 -B2 "BLE_ESP32" || true
-          sed -i 's/#if defined(USE_MI_ESP32) && !defined(USE_BLE_ESP32)/#if defined(USE_MI_ESP32)/' "$F"
-          echo "=== 패치 후 ==="
-          grep -n "USE_MI_ESP32\|native_module(MI32)\|native_module(BLE)" "$F"
-
-      # ── 4-b. [★핵심 보완] 링커 에러 해결을 위한 약결합 스터브 및 구현체 주입 ──
-      - name: Patch xdrv_52_3_berry_MI32.ino - add BLE impl for USE_BLE_ESP32 case
-        run: |
-          cat >> tasmota/tasmota_xdrv_driver/xdrv_52_3_berry_MI32.ino << 'CEOF'
-
-          #if defined(USE_BLE_ESP32) && defined(USE_BERRY)
-          extern "C" {
-            // 링커가 실체를 요구하는 타스모타 내부 베이스 함수들을 약결합(weak) 형태로 강제 상주 선언
-            __attribute__((weak)) uint32_t MI32numberOfDevices(void) { return 0; }
-            __attribute__((weak)) char * MI32getDeviceName(uint32_t slot) { return (char*)""; }
-            __attribute__((weak)) void MI32setBatteryForSlot(uint32_t slot, uint8_t value) {}
-            __attribute__((weak)) void MI32setHumidityForSlot(uint32_t slot, float value) {}
-            __attribute__((weak)) void MI32setTemperatureForSlot(uint32_t slot, float value) {}
-            __attribute__((weak)) uint8_t * MI32getDeviceMAC(uint32_t slot) { return nullptr; }
-            __attribute__((weak)) bool MI32checkBLEinitialization(void) { return true; }
-            __attribute__((weak)) void MI32BerryLoop(void) {}
-            __attribute__((weak)) void MI32setBerryAdvCB(void* function, uint8_t *buffer) {}
-            __attribute__((weak)) void MI32setBerryConnCB(void* function, uint8_t *buffer) {}
-            __attribute__((weak)) void MI32setBerryServerCB(void* function, uint8_t *buffer) {}
-            __attribute__((weak)) bool MI32runBerryConnection(uint8_t operation, bool response, int32_t *arg1) { return false; }
-            __attribute__((weak)) bool MI32setBerryCtxSvc(const char *Svc, bool discoverAttributes) { return false; }
-            __attribute__((weak)) bool MI32setBerryCtxChr(const char *Chr) { return false; }
-            __attribute__((weak)) bool MI32setBerryCtxMAC(uint8_t *MAC, uint8_t type) { return false; }
-            __attribute__((weak)) bool MI32addMACtoBlockList(uint8_t *MAC, uint8_t type) { return false; }
-            __attribute__((weak)) bool MI32addMACtoWatchList(uint8_t *MAC, uint8_t type) { return false; }
-
-            static struct { const char*data=nullptr;size_t size=0;void*cb=nullptr; } be_MI32Wgt2;
-            int be_MI32_devices(void){return MI32numberOfDevices();}
-            void be_MI32_set_bat(int s,int v){MI32setBatteryForSlot(s,v);}
-            const char* be_MI32_get_name(int s){return MI32getDeviceName(s);}
-            uint8_t* be_MI32_get_MAC(int32_t s,size_t*sz){*sz=6;uint8_t*b=MI32getDeviceMAC(s);if(!b)*sz=0;return b;}
-            void be_MI32_set_hum(int s,int v){MI32setHumidityForSlot(s,v);}
-            void be_MI32_set_temp(int s,int v){MI32setTemperatureForSlot(s,v);}
-            bool be_MI32_widget(const char*sbuf,void*fn){if(fn)be_MI32Wgt2.cb=fn;if(be_MI32Wgt2.size==0){be_MI32Wgt2.data=sbuf;be_MI32Wgt2.size=strlen(sbuf);return true;}return false;}
-            static bool _ble_mac_ok(void*vm,size_t sz){return true;}
-            int be_BLE_init(void*vm){return 0;}
-            void be_BLE_loop(void){MI32BerryLoop();}
-            void be_BLE_reg_conn_cb(void*fn,uint8_t*buf){MI32setBerryConnCB(fn,buf);}
-            void be_BLE_reg_server_cb(void*fn,uint8_t*buf){MI32setBerryServerCB(fn,buf);}
-            void be_BLE_reg_adv_cb(void*fn,uint8_t*buf){MI32setBerryAdvCB(fn,buf);}
-            void be_BLE_set_MAC(void*vm,uint8_t*buf,size_t sz,uint8_t t){MI32setBerryCtxMAC(buf,t);}
-            void be_BLE_set_service(void*vm,const char*s,bool da){MI32setBerryCtxSvc(s,da);}
-            void be_BLE_set_characteristic(void*vm,const char*c){MI32setBerryCtxChr(c);}
-            void be_BLE_run(void*vm,uint8_t op,bool resp,int32_t arg1){MI32runBerryConnection(op,resp,&arg1);}
-            void be_BLE_adv_block(void*vm,uint8_t*buf,size_t sz,uint8_t t){MI32addMACtoBlockList(buf,t);}
-            void be_BLE_adv_watch(void*vm,uint8_t*buf,size_t sz,uint8_t t){MI32addMACtoWatchList(buf,t);}
-            int32_t be_BLE_info(void*vm){return 0;}
-          }
-          #endif
-          CEOF
-          echo "안전 보완 패치 완료 - 마지막 5줄 확인:"
-          tail -5 tasmota/tasmota_xdrv_driver/xdrv_52_3_berry_MI32.ino
-
-      # ── 5. Zigbee ZNP → EZSP 전환 ────────────────────────────
+      # ── 2. Zigbee ZNP → EZSP 전환 ────────────────────────────
       - name: Switch Zigbee ZNP -> EZSP
         run: |
           sed -i 's|^[[:space:]]*#define USE_ZIGBEE_ZNP|//&|' tasmota/my_user_config.h
           sed -i 's|^[[:space:]]*//[[:space:]]*#define USE_ZIGBEE_EZSP|#define USE_ZIGBEE_EZSP|' tasmota/my_user_config.h
 
-      # ── 6. Zigbee + TCP_BRIDGE 주입 ───────────────────────────
+      # ── 3. Zigbee + TCP_BRIDGE 주입 ───────────────────────────
       - name: Inject Zigbee + TCP_BRIDGE into FIRMWARE_BLUETOOTH
         run: |
           F=tasmota/include/tasmota_configurations_ESP32.h
@@ -143,7 +44,7 @@ jobs:
           sed -i '/^#endif[[:space:]]*\/\/[[:space:]]*FIRMWARE_BLUETOOTH/i #define USE_ZIGBEE_EZSP' "$F"
           sed -i '/^#endif[[:space:]]*\/\/[[:space:]]*FIRMWARE_BLUETOOTH/i #define USE_TCP_BRIDGE' "$F"
 
-      # ── 7. user_config_override.h ─────────────────────────────
+      # ── 4. user_config_override.h ─────────────────────────────
       - name: Write user_config_override.h
         run: |
           python3 -c "
@@ -170,8 +71,8 @@ jobs:
           open('tasmota/user_config_override.h', 'w').write('\n'.join(lines) + '\n')
           "
 
-      # ── 8. platformio_override.ini - USE_MI_ESP32 라이브러리에 전달 ──
-      - name: Write platformio_override.ini (add USE_MI_ESP32 to build flags)
+      # ── 5. platformio_override.ini - 순정 FIRMWARE_BLUETOOTH 환경 주입 ──
+      - name: Write platformio_override.ini
         run: |
           python3 -c "
           lines = [
@@ -180,32 +81,14 @@ jobs:
             'build_flags             = \${env:tasmota32_base.build_flags}',
             '                          -DFIRMWARE_BLUETOOTH',
             '                          -DOTA_URL=\'\"http://ota.tasmota.com/tasmota32/release/tasmota32-bluetooth.bin\"\'',
-            '                          -DUSE_MI_ESP32',
             'lib_extra_dirs          = lib/libesp32, lib/libesp32_div, lib/lib_basic, lib/lib_i2c, lib/lib_ssl',
             'lib_ignore              = \${env:tasmota32_base.lib_ignore}',
             '                          Micro-RTSP',
           ]
           open('platformio_override.ini', 'w').write('\n'.join(lines) + '\n')
           "
-          echo "=== platformio_override.ini ==="
-          cat platformio_override.ini
 
-      # ── 9. 빌드 전 최종 검증 ─────────────────────────────────
-      - name: Pre-build verification
-        run: |
-          echo "=== USE_BLE_ESP32 / USE_MI_ESP32 위치 ==="
-          grep -n "USE_BLE_ESP32\|USE_MI_ESP32" tasmota/include/tasmota_configurations_ESP32.h | head -10 || true
-          echo ""
-          echo "=== xdrv_52_3 패치 확인 ==="
-          grep -n "if defined(USE_MI_ESP32)" tasmota/tasmota_xdrv_driver/xdrv_52_3_berry_MI32.ino || true
-          echo ""
-          echo "=== be_fixed_BLE.h 존재 확인 ==="
-          ls lib/libesp32/berry/generate/be_fixed_BLE.h && echo "OK" || echo "MISSING"
-          echo ""
-          echo "=== No Key Found 패치 확인 ==="
-          grep -c "// .*AddLog.*No Key" tasmota/tasmota_xsns_sensor/xsns_62_esp32_mi_ble.ino || true
-
-      # ── 10. 빌드 ──────────────────────────────────────────────
+      # ── 6. 빌드 기동 ──────────────────────────────────────────
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -217,22 +100,10 @@ jobs:
       - name: Build tasmota32-bluetooth
         run: platformio run -e tasmota32-bluetooth
 
-      # ── 11. 결과 확인 ─────────────────────────────────────────
-      - name: Check firmware size
-        run: |
-          BIN=build_output/firmware/tasmota32-bluetooth.bin
-          SIZE=$(stat -c%s "$BIN")
-          KB=$(( SIZE / 1024 ))
-          echo "Binary: ${SIZE} bytes (${KB} KB)"
-          if [ $KB -lt 1800 ] || [ $KB -gt 1900 ]; then
-            echo "경고: 예상 범위(1800~1900KB) 벗어남"
-          else
-            echo "크기 정상"
-          fi
-
+      # ── 7. 결과물 아티팩트 업로드 ──────────────────────────────
       - uses: actions/upload-artifact@v4
         with:
-          name: tasmota32-zb-gw03-final
+          name: tasmota32-zb-gw03-pure-ble
           path: |
             build_output/firmware/tasmota32-bluetooth.bin
             build_output/firmware/tasmota32-bluetooth.factory.bin
