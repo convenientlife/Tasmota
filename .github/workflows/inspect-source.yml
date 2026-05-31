@@ -12,32 +12,45 @@ jobs:
           repository: arendst/Tasmota
           ref: v14.6.0
 
-      - name: "[1] berry_tasmota/src 폴더 전체 파일 목록"
+      - name: "[1] be_port.cpp - BLE/MI32 모듈 등록 부분"
         run: |
-          echo "=== lib/libesp32/berry_tasmota/src/ 전체 ==="
-          ls -la lib/libesp32/berry_tasmota/src/ | sort
+          F=lib/libesp32/berry_tasmota/src/be_port.cpp
+          echo "=== USE_MI / USE_BLE 조건부 블록 ==="
+          grep -n "USE_MI_ESP32\|USE_BLE_ESP32\|be_module_BLE\|be_module_MI32\|extern.*module\|module_BLE\|module_MI32" "$F"
           echo ""
-          echo "=== be_modtab 이름 포함 파일 탐색 ==="
-          find . -name "*modtab*" | grep -v ".git" | sort
+          echo "=== 모듈 등록 테이블 부분 (be_extern, be_load) ==="
+          grep -n "be_extern\|be_load\|be_module\|native_module" "$F" | head -40
 
-      - name: "[2] be_MI32_lib.c 전체 내용"
+      - name: "[2] be_modtab_tasmota.c 실제 내용"
         run: |
-          cat lib/libesp32/berry_tasmota/src/be_MI32_lib.c
+          echo "=== 내용 (9 bytes) ==="
+          cat -A lib/libesp32/berry_tasmota/src/be_modtab_tasmota.c
+          xxd lib/libesp32/berry_tasmota/src/be_modtab_tasmota.c
 
-      - name: "[3] xdrv_52_3_berry_MI32.ino 전체 내용"
+      - name: "[3] be_fixed_BLE.h 및 be_fixed_MI32.h 위치와 내용"
         run: |
-          cat tasmota/tasmota_xdrv_driver/xdrv_52_3_berry_MI32.ino
+          echo "=== be_fixed_BLE.h 위치 ==="
+          find . -name "be_fixed_BLE.h" | grep -v ".git"
+          echo ""
+          echo "=== be_fixed_MI32.h 위치 ==="
+          find . -name "be_fixed_MI32.h" | grep -v ".git"
+          echo ""
+          echo "=== solidify 폴더 내용 ==="
+          ls lib/libesp32/berry_tasmota/src/solidify/ | grep -i "ble\|mi32" || echo "BLE/MI32 파일 없음"
+          ls lib/libesp32/berry_tasmota/src/solidify/ | head -20
+          echo ""
+          echo "=== embedded 폴더 내용 ==="
+          ls lib/libesp32/berry_tasmota/src/embedded/ | grep -i "ble\|mi32" || echo "BLE/MI32 파일 없음"
 
-      - name: "[4] platformio_tasmota_env32.ini - tasmota32-bluetooth 환경"
+      - name: "[4] platformio_override_sample.ini 전체"
         run: |
-          echo "=== [env:tasmota32-bluetooth] 섹션 ==="
-          awk '/^\[env:tasmota32-bluetooth\]/,/^\[/' platformio_tasmota_env32.ini | head -40
+          cat platformio_override_sample.ini
 
-      - name: "[5] BLE Berry 관련 xdrv_79 파일에서 Berry 등록 코드"
+      - name: "[5] xdrv_79 에서 Berry BLE 함수 구현 여부"
         run: |
           F=tasmota/tasmota_xdrv_driver/xdrv_79_esp32_ble.ino
-          echo "=== Berry 모듈 등록 관련 코드 ==="
-          grep -n "berry\|Berry\|be_module\|be_define\|add_driver\|MI32\|BLE" "$F" | head -40
+          echo "=== be_BLE_ 함수 구현 여부 ==="
+          grep -n "be_BLE_reg_adv_cb\|be_BLE_init\|be_BLE_loop\|be_BLE_run\|be_BLE_set_MAC" "$F" | head -20
           echo ""
-          echo "=== xdrv_52 파일 목록 ==="
-          ls tasmota/tasmota_xdrv_driver/xdrv_52* 2>/dev/null
+          echo "=== USE_BLE_ESP32 조건부 블록 위치 ==="
+          grep -n "ifdef USE_BLE_ESP32\|ifndef USE_BLE_ESP32\|endif.*BLE_ESP32" "$F" | head -20
