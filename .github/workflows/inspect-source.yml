@@ -12,31 +12,40 @@ jobs:
           repository: arendst/Tasmota
           ref: v14.6.0
 
-      - name: "[1] pio-tools 폴더 전체 파일 목록"
+      - name: "[1] gen-berry-structures.py 전체 내용"
         run: |
-          echo "=== pio-tools/ 파일 목록 ==="
-          ls -la pio-tools/
-          echo ""
-          echo "=== pre_source_dir.py 전체 내용 ==="
-          cat pio-tools/pre_source_dir.py
-          echo ""
+          cat pio-tools/gen-berry-structures.py
 
-      - name: "[2] add_c_flags.py 전체 내용"
+      - name: "[2] coc 도구 파일 목록 및 진입점"
         run: |
-          cat pio-tools/add_c_flags.py 2>/dev/null || echo "파일 없음"
-
-      - name: "[3] be_fixed 생성 관련 스크립트 탐색"
-        run: |
-          echo "=== be_fixed 관련 언급 파일 ==="
-          grep -rn "be_fixed\|coc\|const_object_info" pio-tools/ 2>/dev/null || echo "없음"
+          echo "=== lib/libesp32/berry/tools/coc/ 목록 ==="
+          ls -la lib/libesp32/berry/tools/coc/
           echo ""
-          echo "=== solidify 관련 스크립트 ==="
-          find . -name "*.py" | grep -v ".git\|.pio" | xargs grep -l "solidify\|be_fixed\|MI32\|USE_MI" 2>/dev/null | head -10
+          echo "=== coc 또는 __main__.py 내용 (첫 30줄) ==="
+          cat lib/libesp32/berry/tools/coc/coc 2>/dev/null | head -30 || echo "coc 없음"
+          ls lib/libesp32/berry/tools/coc/*.py | head -5 | while read f; do
+            echo "--- $f 첫 5줄 ---"
+            head -5 "$f"
+          done
 
-      - name: "[4] platformio_tasmota_env32.ini - bluetooth 섹션 상세"
+      - name: "[3] coc 직접 실행 테스트 (be_fixed_MI32.h 생성)"
         run: |
-          echo "=== tasmota32-bluetooth 섹션 (224번 줄부터) ==="
-          sed -n '220,260p' platformio_tasmota_env32.ini
+          cd lib/libesp32/berry
+          echo "=== coc 실행 (generate 모드) ==="
+          python3 tools/coc/coc -o generate src default \
+            ../berry_tasmota/src \
+            ../berry_matter/src/solidify \
+            ../berry_matter/src \
+            ../berry_tasmota/src/solidify \
+            ../berry_mapping/src \
+            ../berry_int64/src \
+            -c default/berry_conf.h 2>&1 | tail -20
           echo ""
-          echo "=== esp32_defaults 섹션 ==="
-          grep -A 20 "^\[esp32_defaults\]" platformio_tasmota32.ini | head -25
+          echo "=== 생성된 be_fixed_*.h 파일 ==="
+          find ../berry_tasmota/src -name "be_fixed_*.h" 2>/dev/null | sort
+          echo ""
+          echo "=== be_fixed_MI32.h 앞 20줄 ==="
+          head -20 ../berry_tasmota/src/be_fixed_MI32.h 2>/dev/null || echo "생성 안 됨"
+          echo ""
+          echo "=== be_fixed_BLE.h 앞 20줄 ==="
+          head -20 ../berry_tasmota/src/be_fixed_BLE.h 2>/dev/null || echo "생성 안 됨"
