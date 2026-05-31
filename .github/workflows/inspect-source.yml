@@ -12,45 +12,54 @@ jobs:
           repository: arendst/Tasmota
           ref: v14.6.0
 
-      - name: "[1] be_port.cpp - BLE/MI32 모듈 등록 부분"
+      - name: "[1] be_port.cpp 모듈 등록 방식 확인"
         run: |
           F=lib/libesp32/berry_tasmota/src/be_port.cpp
-          echo "=== USE_MI / USE_BLE 조건부 블록 ==="
-          grep -n "USE_MI_ESP32\|USE_BLE_ESP32\|be_module_BLE\|be_module_MI32\|extern.*module\|module_BLE\|module_MI32" "$F"
+          echo "=== be_module / be_extern / be_load 패턴 ==="
+          grep -n "be_module\|be_extern\|be_load\|native_module\|be_define\|EXPORT" "$F" || echo "(없음)"
           echo ""
-          echo "=== 모듈 등록 테이블 부분 (be_extern, be_load) ==="
-          grep -n "be_extern\|be_load\|be_module\|native_module" "$F" | head -40
+          echo "=== include 목록 ==="
+          grep -n "#include" "$F"
+          echo ""
+          echo "=== 파일 앞 50줄 ==="
+          head -50 "$F"
 
       - name: "[2] be_modtab_tasmota.c 실제 내용"
         run: |
-          echo "=== 내용 (9 bytes) ==="
-          cat -A lib/libesp32/berry_tasmota/src/be_modtab_tasmota.c
+          echo "=== 내용 ==="
+          cat lib/libesp32/berry_tasmota/src/be_modtab_tasmota.c
+          echo ""
           xxd lib/libesp32/berry_tasmota/src/be_modtab_tasmota.c
 
-      - name: "[3] be_fixed_BLE.h 및 be_fixed_MI32.h 위치와 내용"
+      - name: "[3] be_fixed_BLE.h / be_fixed_MI32.h 위치 및 내용"
         run: |
           echo "=== be_fixed_BLE.h 위치 ==="
-          find . -name "be_fixed_BLE.h" | grep -v ".git"
+          find . -name "be_fixed_BLE.h" | grep -v ".git" || echo "없음"
           echo ""
           echo "=== be_fixed_MI32.h 위치 ==="
-          find . -name "be_fixed_MI32.h" | grep -v ".git"
+          find . -name "be_fixed_MI32.h" | grep -v ".git" || echo "없음"
           echo ""
-          echo "=== solidify 폴더 내용 ==="
-          ls lib/libesp32/berry_tasmota/src/solidify/ | grep -i "ble\|mi32" || echo "BLE/MI32 파일 없음"
-          ls lib/libesp32/berry_tasmota/src/solidify/ | head -20
+          echo "=== solidify 폴더 파일 목록 ==="
+          ls lib/libesp32/berry_tasmota/src/solidify/ 2>/dev/null || echo "없음"
           echo ""
-          echo "=== embedded 폴더 내용 ==="
-          ls lib/libesp32/berry_tasmota/src/embedded/ | grep -i "ble\|mi32" || echo "BLE/MI32 파일 없음"
+          echo "=== embedded 폴더 파일 목록 ==="
+          ls lib/libesp32/berry_tasmota/src/embedded/ 2>/dev/null || echo "없음"
 
-      - name: "[4] platformio_override_sample.ini 전체"
-        run: |
-          cat platformio_override_sample.ini
-
-      - name: "[5] xdrv_79 에서 Berry BLE 함수 구현 여부"
+      - name: "[4] xdrv_79 에서 be_BLE_ 함수 구현 여부"
         run: |
           F=tasmota/tasmota_xdrv_driver/xdrv_79_esp32_ble.ino
           echo "=== be_BLE_ 함수 구현 여부 ==="
-          grep -n "be_BLE_reg_adv_cb\|be_BLE_init\|be_BLE_loop\|be_BLE_run\|be_BLE_set_MAC" "$F" | head -20
+          grep -n "be_BLE_reg_adv_cb\|be_BLE_init\|be_BLE_loop\|be_BLE_run\|be_BLE_set_MAC\|BerryAdvCB\|BerryLoop\|BerryConn" "$F" || echo "(없음)"
           echo ""
-          echo "=== USE_BLE_ESP32 조건부 블록 위치 ==="
-          grep -n "ifdef USE_BLE_ESP32\|ifndef USE_BLE_ESP32\|endif.*BLE_ESP32" "$F" | head -20
+          echo "=== Berry 관련 조건부 블록 ==="
+          grep -n "USE_BERRY\|ifdef.*BERRY\|ifndef.*BERRY" "$F" || echo "(없음)"
+
+      - name: "[5] platformio_override_sample.ini 전체"
+        run: |
+          cat platformio_override_sample.ini
+
+      - name: "[6] be_MI32_lib.c 에서 be_fixed 헤더 include 위치"
+        run: |
+          F=lib/libesp32/berry_tasmota/src/be_MI32_lib.c
+          echo "=== include 및 be_define 관련 ==="
+          grep -n "#include\|be_define\|BE_EXPORT\|scope.*global" "$F"
