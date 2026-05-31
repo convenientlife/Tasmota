@@ -12,41 +12,21 @@ jobs:
           repository: arendst/Tasmota
           ref: v14.6.0
 
-      - name: "[1] tasmota_options.h 내용 (berry_tasmota 라이브러리가 force-include 하는 파일)"
+      - name: "[1] lib/libesp32/berry/default/be_modtab.c 전체 내용"
         run: |
-          echo "=== include/ 폴더 파일 목록 ==="
-          ls include/ 2>/dev/null || echo "없음"
-          echo ""
-          echo "=== tasmota/include/ 폴더에서 tasmota_options.h 탐색 ==="
-          find . -name "tasmota_options.h" | grep -v ".git" || echo "없음"
-          echo ""
-          echo "=== tasmota/tasmota_options.h 내용 (있으면) ==="
-          cat tasmota/tasmota_options.h 2>/dev/null | head -30 || echo "없음"
+          cat lib/libesp32/berry/default/be_modtab.c
 
-      - name: "[2] coc 실행 후 be_MI32_lib.c 컴파일 테스트"
+      - name: "[2] lib/libesp32/berry/default/ 폴더 전체 파일 목록"
         run: |
-          # coc 실행 (generate 폴더 생성)
-          mkdir -p lib/libesp32/berry/generate
-          cd lib/libesp32/berry
-          python3 tools/coc/coc -o generate src default \
-            ../berry_tasmota/src \
-            ../berry_matter/src/solidify \
-            ../berry_matter/src \
-            ../berry_tasmota/src/solidify \
-            ../berry_mapping/src \
-            ../berry_int64/src \
-            -c default/berry_conf.h
-          cd /home/runner/work/Tasmota/Tasmota
-          echo "생성 확인: $(ls lib/libesp32/berry/generate/ | grep -E 'BLE|MI32')"
-
-          # USE_MI_ESP32 정의 시 be_MI32_lib.c 컴파일 테스트
+          ls -la lib/libesp32/berry/default/
           echo ""
-          echo "=== USE_MI_ESP32 정의 시 컴파일 테스트 ==="
-          gcc -DUSE_MI_ESP32 \
-              -I lib/libesp32/berry/generate \
-              -I lib/libesp32/berry/src \
-              -I lib/libesp32/berry_mapping/src \
-              -fsyntax-only \
-              lib/libesp32/berry_tasmota/src/be_MI32_lib.c 2>&1 \
-            && echo "컴파일 성공 (USE_MI_ESP32 정의 시 be_fixed_BLE.h 포함됨)" \
-            || echo "컴파일 실패 - 추가 include 경로 필요"
+          echo "=== berry.h 내 모듈 등록 관련 ==="
+          grep -n "be_module\|native_module\|be_load\|modtab" lib/libesp32/berry/src/be_module.c 2>/dev/null | head -30
+
+      - name: "[3] be_port.cpp 전체 내용 (모듈 등록 부분 탐색)"
+        run: |
+          echo "=== static_block 사용 위치 ==="
+          grep -n "static_block\|be_reg\|loadsolid\|builtin" lib/libesp32/berry_tasmota/src/be_port.cpp | head -20
+          echo ""
+          echo "=== be_port.cpp 중반부 (200~300줄) ==="
+          sed -n '200,300p' lib/libesp32/berry_tasmota/src/be_port.cpp
