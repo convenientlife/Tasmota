@@ -12,35 +12,32 @@ jobs:
           repository: arendst/Tasmota
           ref: v14.6.0
 
-      - name: "[0] 실제 파일 위치 탐색"
+      - name: "[1] berry_tasmota/src 폴더 전체 파일 목록"
         run: |
-          echo "=== be_modtab_tasmota.c 위치 ==="
-          find . -name "be_modtab_tasmota.c" 2>/dev/null | grep -v ".git"
-
+          echo "=== lib/libesp32/berry_tasmota/src/ 전체 ==="
+          ls -la lib/libesp32/berry_tasmota/src/ | sort
           echo ""
-          echo "=== be_MI32_lib.c 위치 ==="
-          find . -name "be_MI32_lib.c" 2>/dev/null | grep -v ".git"
+          echo "=== be_modtab 이름 포함 파일 탐색 ==="
+          find . -name "*modtab*" | grep -v ".git" | sort
 
-          echo ""
-          echo "=== berry_tasmota 폴더 위치 ==="
-          find . -type d -name "berry_tasmota" 2>/dev/null | grep -v ".git"
-
-          echo ""
-          echo "=== lib 폴더 구조 (2단계) ==="
-          find . -maxdepth 3 -type d | grep -v ".git\|.pio" | sort
-
-          echo ""
-          echo "=== BLE 관련 .c/.h 파일 전체 ==="
-          find . -name "*BLE*" -o -name "*ble_esp32*" | grep -v ".git" | sort
-
-          echo ""
-          echo "=== MI32 관련 .c/.h 파일 ==="
-          find . -name "*MI32*" | grep -v ".git" | sort
-
-      - name: "[1] platformio 환경 파일 목록"
+      - name: "[2] be_MI32_lib.c 전체 내용"
         run: |
-          echo "=== 루트의 .ini 파일 ==="
-          ls *.ini 2>/dev/null || echo "없음"
+          cat lib/libesp32/berry_tasmota/src/be_MI32_lib.c
+
+      - name: "[3] xdrv_52_3_berry_MI32.ino 전체 내용"
+        run: |
+          cat tasmota/tasmota_xdrv_driver/xdrv_52_3_berry_MI32.ino
+
+      - name: "[4] platformio_tasmota_env32.ini - tasmota32-bluetooth 환경"
+        run: |
+          echo "=== [env:tasmota32-bluetooth] 섹션 ==="
+          awk '/^\[env:tasmota32-bluetooth\]/,/^\[/' platformio_tasmota_env32.ini | head -40
+
+      - name: "[5] BLE Berry 관련 xdrv_79 파일에서 Berry 등록 코드"
+        run: |
+          F=tasmota/tasmota_xdrv_driver/xdrv_79_esp32_ble.ino
+          echo "=== Berry 모듈 등록 관련 코드 ==="
+          grep -n "berry\|Berry\|be_module\|be_define\|add_driver\|MI32\|BLE" "$F" | head -40
           echo ""
-          echo "=== tasmota32-bluetooth 환경 정의 위치 ==="
-          grep -rn "tasmota32-bluetooth" *.ini 2>/dev/null | head -20
+          echo "=== xdrv_52 파일 목록 ==="
+          ls tasmota/tasmota_xdrv_driver/xdrv_52* 2>/dev/null
