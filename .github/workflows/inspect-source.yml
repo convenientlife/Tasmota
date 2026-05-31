@@ -12,41 +12,31 @@ jobs:
           repository: arendst/Tasmota
           ref: v14.6.0
 
-      - name: "[1] coc.py (be_fixed 생성 도구) 위치 탐색"
+      - name: "[1] pio-tools 폴더 전체 파일 목록"
         run: |
-          echo "=== coc.py 탐색 ==="
-          find . -name "coc.py" | grep -v ".git" || echo "없음"
+          echo "=== pio-tools/ 파일 목록 ==="
+          ls -la pio-tools/
           echo ""
-          echo "=== tools 폴더 ==="
-          ls tools/ 2>/dev/null || echo "없음"
+          echo "=== pre_source_dir.py 전체 내용 ==="
+          cat pio-tools/pre_source_dir.py
           echo ""
-          echo "=== extra_scripts (pre-build 스크립트) 위치 ==="
-          grep -rn "extra_scripts\|coc\|be_fixed" platformio.ini platformio_tasmota*.ini 2>/dev/null | head -20
 
-      - name: "[2] platformio_tasmota_env32.ini - tasmota32-bluetooth 전체 섹션"
+      - name: "[2] add_c_flags.py 전체 내용"
         run: |
-          awk '/^\[env:tasmota32-bluetooth\]/{found=1} found{print; if(/^\[/ && !/^\[env:tasmota32-bluetooth\]/) exit}' \
-            platformio_tasmota_env32.ini
+          cat pio-tools/add_c_flags.py 2>/dev/null || echo "파일 없음"
 
-      - name: "[3] be_mapping.h 포함하는 헤더 체인"
+      - name: "[3] be_fixed 생성 관련 스크립트 탐색"
         run: |
-          echo "=== be_mapping.h include 내용 ==="
-          find . -name "be_mapping.h" | grep -v ".git" | head -3 | while read f; do
-            echo "파일: $f"
-            grep "#include" "$f" | head -10
-          done
+          echo "=== be_fixed 관련 언급 파일 ==="
+          grep -rn "be_fixed\|coc\|const_object_info" pio-tools/ 2>/dev/null || echo "없음"
           echo ""
-          echo "=== be_constobj.h include 내용 ==="
-          find . -name "be_constobj.h" | grep -v ".git" | head -3 | while read f; do
-            echo "파일: $f"
-            grep "#include" "$f" | head -10
-          done
+          echo "=== solidify 관련 스크립트 ==="
+          find . -name "*.py" | grep -v ".git\|.pio" | xargs grep -l "solidify\|be_fixed\|MI32\|USE_MI" 2>/dev/null | head -10
 
-      - name: "[4] xdrv_52_3_berry_MI32.ino - 수정 대상 줄 확인"
+      - name: "[4] platformio_tasmota_env32.ini - bluetooth 섹션 상세"
         run: |
-          F=tasmota/tasmota_xdrv_driver/xdrv_52_3_berry_MI32.ino
-          echo "=== ifdef 조건 줄들 ==="
-          grep -n "ifdef\|ifndef\|endif\|if defined" "$F"
+          echo "=== tasmota32-bluetooth 섹션 (224번 줄부터) ==="
+          sed -n '220,260p' platformio_tasmota_env32.ini
           echo ""
-          echo "=== 수정 대상 줄 (1~30줄) ==="
-          head -30 "$F"
+          echo "=== esp32_defaults 섹션 ==="
+          grep -A 20 "^\[esp32_defaults\]" platformio_tasmota32.ini | head -25
