@@ -12,26 +12,22 @@ jobs:
           repository: arendst/Tasmota
           ref: v14.6.0
 
-      - name: "[1] gen-berry-structures.py 전체 내용"
+      - name: "[1] berry library.json 및 generate 폴더 확인"
         run: |
-          cat pio-tools/gen-berry-structures.py
-
-      - name: "[2] coc 도구 파일 목록 및 진입점"
-        run: |
-          echo "=== lib/libesp32/berry/tools/coc/ 목록 ==="
-          ls -la lib/libesp32/berry/tools/coc/
+          echo "=== lib/libesp32/berry/ 폴더 구조 ==="
+          ls lib/libesp32/berry/
           echo ""
-          echo "=== coc 또는 __main__.py 내용 (첫 30줄) ==="
-          cat lib/libesp32/berry/tools/coc/coc 2>/dev/null | head -30 || echo "coc 없음"
-          ls lib/libesp32/berry/tools/coc/*.py | head -5 | while read f; do
-            echo "--- $f 첫 5줄 ---"
-            head -5 "$f"
-          done
+          echo "=== library.json 내용 ==="
+          cat lib/libesp32/berry/library.json 2>/dev/null || echo "없음"
+          echo ""
+          echo "=== generate 폴더 존재 여부 ==="
+          ls lib/libesp32/berry/generate/ 2>/dev/null || echo "generate 폴더 없음"
 
-      - name: "[3] coc 직접 실행 테스트 (be_fixed_MI32.h 생성)"
+      - name: "[2] generate 폴더 생성 후 coc 재실행"
         run: |
+          mkdir -p lib/libesp32/berry/generate
           cd lib/libesp32/berry
-          echo "=== coc 실행 (generate 모드) ==="
+          echo "=== coc 실행 ==="
           python3 tools/coc/coc -o generate src default \
             ../berry_tasmota/src \
             ../berry_matter/src/solidify \
@@ -39,13 +35,22 @@ jobs:
             ../berry_tasmota/src/solidify \
             ../berry_mapping/src \
             ../berry_int64/src \
-            -c default/berry_conf.h 2>&1 | tail -20
+            -c default/berry_conf.h 2>&1
           echo ""
-          echo "=== 생성된 be_fixed_*.h 파일 ==="
-          find ../berry_tasmota/src -name "be_fixed_*.h" 2>/dev/null | sort
+          echo "=== generate 폴더 생성된 파일 ==="
+          ls generate/ | grep -i "BLE\|MI32" || echo "BLE/MI32 없음"
+          ls generate/ | head -20
           echo ""
           echo "=== be_fixed_MI32.h 앞 20줄 ==="
-          head -20 ../berry_tasmota/src/be_fixed_MI32.h 2>/dev/null || echo "생성 안 됨"
+          head -20 generate/be_fixed_MI32.h 2>/dev/null || echo "없음"
           echo ""
           echo "=== be_fixed_BLE.h 앞 20줄 ==="
-          head -20 ../berry_tasmota/src/be_fixed_BLE.h 2>/dev/null || echo "생성 안 됨"
+          head -20 generate/be_fixed_BLE.h 2>/dev/null || echo "없음"
+
+      - name: "[3] berry_tasmota library.json - include 경로 확인"
+        run: |
+          echo "=== lib/libesp32/berry_tasmota/ 폴더 구조 ==="
+          ls lib/libesp32/berry_tasmota/
+          echo ""
+          echo "=== library.json 내용 ==="
+          cat lib/libesp32/berry_tasmota/library.json 2>/dev/null || echo "없음"
