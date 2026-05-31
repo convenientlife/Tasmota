@@ -14,13 +14,24 @@ jobs:
           repository: arendst/Tasmota
           ref: v14.6.0
 
-      # ── 1. No Key Found 콘솔 도배 차단 ─────────────────────
-      - name: Mute No Key Found (xsns_62_esp32_mi_ble.ino)
+      # ── 1. No Key Found 콘솔 차단 및 USE_BLE_ESP32 환경 빌드 락 해제 (수정됨) ──
+      - name: Mute No Key Found & Force Compile MI32 Driver
         run: |
           F=tasmota/tasmota_xsns_sensor/xsns_62_esp32_mi_ble.ino
+          
+          # No Key Found 로그 주석 처리
           sed -i '/AddLog.*No Key found/s|^|// |' "$F"
-          echo "패치 확인:"
-          grep -n "No Key found" "$F"
+          echo "로그 차단 확인:"
+          grep -n "No Key found" "$F" || true
+          
+          echo "=== 패치 전 상단 조건문 ==="
+          head -n 25 "$F" | grep "USE_MI_ESP32" || true
+          
+          # [★ 핵심 수정] USE_BLE_ESP32가 선언되어 있어도 이 파일이 무조건 빌드되도록 상단 조건문 강제 치환
+          sed -i 's/#if defined(USE_MI_ESP32) && !defined(USE_BLE_ESP32)/#if defined(USE_MI_ESP32)/' "$F"
+          
+          echo "=== 패치 후 상단 조건문 ==="
+          head -n 25 "$F" | grep "USE_MI_ESP32" || true
 
       # ── 2. /ble 웹페이지 race condition 수정 ─────────────────
       - name: Patch xdrv_79 - /ble handler before BLEInitState early-return
@@ -61,13 +72,12 @@ jobs:
         run: |
           F=lib/libesp32/berry/default/be_modtab.c
           echo "=== 패치 전 ==="
-          grep -n "USE_MI_ESP32\|USE_BLE_ESP32\|MI32\|BLE" "$F" | grep -A2 -B2 "BLE_ESP32"
+          grep -n "USE_MI_ESP32\|USE_BLE_ESP32\|MI32\|BLE" "$F" | grep -A2 -B2 "BLE_ESP32" || true
           sed -i 's/#if defined(USE_MI_ESP32) && !defined(USE_BLE_ESP32)/#if defined(USE_MI_ESP32)/' "$F"
           echo "=== 패치 후 ==="
           grep -n "USE_MI_ESP32\|native_module(MI32)\|native_module(BLE)" "$F"
 
       # ── 4-b. Berry BLE 구현 추가 (USE_BLE_ESP32 케이스) ──────────
-      # ── 4. [핵심] Berry BLE 구현 추가 (USE_BLE_ESP32 케이스) ─────
       - name: Patch xdrv_52_3_berry_MI32.ino - add BLE impl for USE_BLE_ESP32 case
         run: |
           cat >> tasmota/tasmota_xdrv_driver/xdrv_52_3_berry_MI32.ino << 'CEOF'
@@ -158,7 +168,7 @@ jobs:
           open('tasmota/user_config_override.h', 'w').write('\n'.join(lines) + '\n')
           "
 
-      # ── 8. [핵심] platformio_override.ini - USE_MI_ESP32 라이브러리에 전달
+      # ── 8. [핵심] platformio_override.ini - USE_MI_ESP32 라이브러리에 전달 ──
       - name: Write platformio_override.ini (add USE_MI_ESP32 to build flags)
         run: |
           python3 -c "
@@ -182,16 +192,16 @@ jobs:
       - name: Pre-build verification
         run: |
           echo "=== USE_BLE_ESP32 / USE_MI_ESP32 위치 ==="
-          grep -n "USE_BLE_ESP32\|USE_MI_ESP32" tasmota/include/tasmota_configurations_ESP32.h | head -10
+          grep -n "USE_BLE_ESP32\|USE_MI_ESP32" tasmota/include/tasmota_configurations_ESP32.h | head -10 || true
           echo ""
           echo "=== xdrv_52_3 패치 확인 ==="
-          grep -n "if defined(USE_MI_ESP32)" tasmota/tasmota_xdrv_driver/xdrv_52_3_berry_MI32.ino
+          grep -n "if defined(USE_MI_ESP32)" tasmota/tasmota_xdrv_driver/xdrv_52_3_berry_MI32.ino || true
           echo ""
           echo "=== be_fixed_BLE.h 존재 확인 ==="
           ls lib/libesp32/berry/generate/be_fixed_BLE.h && echo "OK" || echo "MISSING"
           echo ""
           echo "=== No Key Found 패치 확인 ==="
-          grep -c "// .*AddLog.*No Key" tasmota/tasmota_xsns_sensor/xsns_62_esp32_mi_ble.ino
+          grep -c "// .*AddLog.*No Key" tasmota/tasmota_xsns_sensor/xsns_62_esp32_mi_ble.ino || true
 
       # ── 10. 빌드 ──────────────────────────────────────────────
       - name: Set up Python
