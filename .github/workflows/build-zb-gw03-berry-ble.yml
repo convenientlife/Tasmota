@@ -14,7 +14,14 @@ jobs:
           repository: arendst/Tasmota
           ref: v14.6.0
 
-      # ── 1. /ble 웹페이지 race condition 수정 ─────────────────
+      # ── 1. No Key Found 콘솔 도배 차단 ─────────────────────
+      - name: Mute No Key Found (xsns_62_esp32_mi_ble.ino)
+        run: |
+          F=tasmota/tasmota_xsns_sensor/xsns_62_esp32_mi_ble.ino
+          sed -i '/AddLog.*No Key found/s|^|// |' "$F"
+          echo "콘솔 도배 차단 패치 완료"
+
+      # ── 2. /ble 웹페이지 race condition 수정 ─────────────────
       - name: Patch xdrv_79 - /ble handler before BLEInitState early-return
         run: |
           F=tasmota/tasmota_xdrv_driver/xdrv_79_esp32_ble.ino
@@ -30,13 +37,13 @@ jobs:
           {print}
           ' "$F" > "$F.new" && mv "$F.new" "$F"
 
-      # ── 2. Zigbee ZNP → EZSP 전환 ────────────────────────────
+      # ── 3. Zigbee ZNP → EZSP 전환 ────────────────────────────
       - name: Switch Zigbee ZNP -> EZSP
         run: |
           sed -i 's|^[[:space:]]*#define USE_ZIGBEE_ZNP|//&|' tasmota/my_user_config.h
           sed -i 's|^[[:space:]]*//[[:space:]]*#define USE_ZIGBEE_EZSP|#define USE_ZIGBEE_EZSP|' tasmota/my_user_config.h
 
-      # ── 3. Zigbee + TCP_BRIDGE 주입 ───────────────────────────
+      # ── 4. Zigbee + TCP_BRIDGE 주입 ───────────────────────────
       - name: Inject Zigbee + TCP_BRIDGE into FIRMWARE_BLUETOOTH
         run: |
           F=tasmota/include/tasmota_configurations_ESP32.h
@@ -44,7 +51,7 @@ jobs:
           sed -i '/^#endif[[:space:]]*\/\/[[:space:]]*FIRMWARE_BLUETOOTH/i #define USE_ZIGBEE_EZSP' "$F"
           sed -i '/^#endif[[:space:]]*\/\/[[:space:]]*FIRMWARE_BLUETOOTH/i #define USE_TCP_BRIDGE' "$F"
 
-      # ── 4. user_config_override.h ─────────────────────────────
+      # ── 5. user_config_override.h ─────────────────────────────
       - name: Write user_config_override.h
         run: |
           python3 -c "
@@ -71,7 +78,7 @@ jobs:
           open('tasmota/user_config_override.h', 'w').write('\n'.join(lines) + '\n')
           "
 
-      # ── 5. platformio_override.ini - 순정 FIRMWARE_BLUETOOTH 환경 주입 ──
+      # ── 6. platformio_override.ini - 순정 FIRMWARE_BLUETOOTH 환경 주입 ──
       - name: Write platformio_override.ini
         run: |
           python3 -c "
@@ -88,7 +95,7 @@ jobs:
           open('platformio_override.ini', 'w').write('\n'.join(lines) + '\n')
           "
 
-      # ── 6. 빌드 기동 ──────────────────────────────────────────
+      # ── 7. 빌드 기동 ──────────────────────────────────────────
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -100,7 +107,7 @@ jobs:
       - name: Build tasmota32-bluetooth
         run: platformio run -e tasmota32-bluetooth
 
-      # ── 7. 결과물 아티팩트 업로드 ──────────────────────────────
+      # ── 8. 결과물 아티팩트 업로드 ──────────────────────────────
       - uses: actions/upload-artifact@v4
         with:
           name: tasmota32-zb-gw03-pure-ble
