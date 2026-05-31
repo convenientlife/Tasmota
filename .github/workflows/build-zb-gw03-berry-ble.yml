@@ -1,0 +1,174 @@
+name: Build ZB-GW03 (Zigbee + BLE + Berry BLE)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: arendst/Tasmota
+          ref: v14.6.0
+
+      # ── 1. No Key Found 콘솔 도배 차단 ─────────────────────
+      - name: Mute No Key Found (xsns_62_esp32_mi_ble.ino)
+        run: |
+          F=tasmota/tasmota_xsns_sensor/xsns_62_esp32_mi_ble.ino
+          sed -i '/AddLog.*No Key found/s|^|// |' "$F"
+          echo "패치 확인:"
+          grep -n "No Key found" "$F"
+
+      # ── 2. /ble 웹페이지 race condition 수정 ─────────────────
+      - name: Patch xdrv_79 - /ble handler before BLEInitState early-return
+        run: |
+          F=tasmota/tasmota_xdrv_driver/xdrv_79_esp32_ble.ino
+          awk '
+          /bool Xdrv79\(uint32_t function\)/ {inx=1}
+          inx && /if \(!BLE_ESP32::BLEInitState\) \{/ && !done {
+            print "#ifdef USE_WEBSERVER";
+            print "  if (FUNC_WEB_ADD_BUTTON == function) { WSContentSend_P(BLE_ESP32::HTTP_BTN_MENU_BLE); return false; }";
+            print "  if (FUNC_WEB_ADD_HANDLER == function) { WebServer_on(PSTR(\"/\" WEB_HANDLE_BLE), BLE_ESP32::HandleBleConfiguration); return false; }";
+            print "#endif";
+            done=1
+          }
+          {print}
+          ' "$F" > "$F.new" && mv "$F.new" "$F"
+          echo "패치 확인:"
+          awk '/bool Xdrv79\(uint32_t function\)/,/switch \(function\) \{/' "$F"
+
+      # ── 3. [핵심] Berry BLE/MI32 구조체 생성 (coc 실행) ──────
+      - name: Generate Berry BLE/MI32 structures via coc
+        run: |
+          mkdir -p lib/libesp32/berry/generate
+          cd lib/libesp32/berry
+          python3 tools/coc/coc -o generate src default \
+            ../berry_tasmota/src \
+            ../berry_matter/src/solidify \
+            ../berry_matter/src \
+            ../berry_tasmota/src/solidify \
+            ../berry_mapping/src \
+            ../berry_int64/src \
+            -c default/berry_conf.h
+          echo "생성된 BLE/MI32 파일:"
+          ls generate/ | grep -E "BLE|MI32"
+
+      # ── 4. [핵심] Berry MI32 - USE_BLE_ESP32 조건 제거 ────────
+      - name: Patch xdrv_52_3_berry_MI32.ino - enable BLE impl when USE_BLE_ESP32 defined
+        run: |
+          F=tasmota/tasmota_xdrv_driver/xdrv_52_3_berry_MI32.ino
+          sed -i 's/#if defined(USE_MI_ESP32) && !defined(USE_BLE_ESP32)/#if defined(USE_MI_ESP32)/' "$F"
+          echo "패치 확인:"
+          grep -n "if defined(USE_MI_ESP32)" "$F"
+
+      # ── 5. Zigbee ZNP → EZSP 전환 ────────────────────────────
+      - name: Switch Zigbee ZNP -> EZSP
+        run: |
+          sed -i 's|^[[:space:]]*#define USE_ZIGBEE_ZNP|//&|' tasmota/my_user_config.h
+          sed -i 's|^[[:space:]]*//[[:space:]]*#define USE_ZIGBEE_EZSP|#define USE_ZIGBEE_EZSP|' tasmota/my_user_config.h
+
+      # ── 6. Zigbee + TCP_BRIDGE 주입 ───────────────────────────
+      - name: Inject Zigbee + TCP_BRIDGE into FIRMWARE_BLUETOOTH
+        run: |
+          F=tasmota/include/tasmota_configurations_ESP32.h
+          sed -i '/^#endif[[:space:]]*\/\/[[:space:]]*FIRMWARE_BLUETOOTH/i #define USE_ZIGBEE' "$F"
+          sed -i '/^#endif[[:space:]]*\/\/[[:space:]]*FIRMWARE_BLUETOOTH/i #define USE_ZIGBEE_EZSP' "$F"
+          sed -i '/^#endif[[:space:]]*\/\/[[:space:]]*FIRMWARE_BLUETOOTH/i #define USE_TCP_BRIDGE' "$F"
+
+      # ── 7. user_config_override.h ─────────────────────────────
+      - name: Write user_config_override.h
+        run: |
+          python3 -c "
+          lines = [
+            '#ifndef _USER_CONFIG_OVERRIDE_H_',
+            '#define _USER_CONFIG_OVERRIDE_H_',
+            '',
+            '#define USE_ZIGBEE_EEPROM',
+            '#define USE_ZIGBEE_CHANNEL 11',
+            '',
+            '#define USE_ETHERNET',
+            '#define ETH_TYPE 0',
+            '#define ETH_CLKMODE 3',
+            '#undef  ETH_ADDRESS',
+            '#define ETH_ADDRESS 1',
+            '',
+            '#define BLE_ESP32_ENABLE true',
+            '',
+            '#undef  CODE_IMAGE_STR',
+            '#define CODE_IMAGE_STR \"tcp bridge and bluetooth\"',
+            '',
+            '#endif',
+          ]
+          open('tasmota/user_config_override.h', 'w').write('\n'.join(lines) + '\n')
+          "
+
+      # ── 8. [핵심] platformio_override.ini - USE_MI_ESP32 라이브러리에 전달
+      - name: Write platformio_override.ini (add USE_MI_ESP32 to build flags)
+        run: |
+          python3 -c "
+          lines = [
+            '[env:tasmota32-bluetooth]',
+            'extends                 = env:tasmota32_base',
+            'build_flags             = \${env:tasmota32_base.build_flags}',
+            '                          -DFIRMWARE_BLUETOOTH',
+            '                          -DOTA_URL=\'\"http://ota.tasmota.com/tasmota32/release/tasmota32-bluetooth.bin\"\'',
+            '                          -DUSE_MI_ESP32',
+            'lib_extra_dirs          = lib/libesp32, lib/libesp32_div, lib/lib_basic, lib/lib_i2c, lib/lib_ssl',
+            'lib_ignore              = \${env:tasmota32_base.lib_ignore}',
+            '                          Micro-RTSP',
+          ]
+          open('platformio_override.ini', 'w').write('\n'.join(lines) + '\n')
+          "
+          echo "=== platformio_override.ini ==="
+          cat platformio_override.ini
+
+      # ── 9. 빌드 전 최종 검증 ─────────────────────────────────
+      - name: Pre-build verification
+        run: |
+          echo "=== USE_BLE_ESP32 / USE_MI_ESP32 위치 ==="
+          grep -n "USE_BLE_ESP32\|USE_MI_ESP32" tasmota/include/tasmota_configurations_ESP32.h | head -10
+          echo ""
+          echo "=== xdrv_52_3 패치 확인 ==="
+          grep -n "if defined(USE_MI_ESP32)" tasmota/tasmota_xdrv_driver/xdrv_52_3_berry_MI32.ino
+          echo ""
+          echo "=== be_fixed_BLE.h 존재 확인 ==="
+          ls lib/libesp32/berry/generate/be_fixed_BLE.h && echo "OK" || echo "MISSING"
+          echo ""
+          echo "=== No Key Found 패치 확인 ==="
+          grep -c "// .*AddLog.*No Key" tasmota/tasmota_xsns_sensor/xsns_62_esp32_mi_ble.ino
+
+      # ── 10. 빌드 ──────────────────────────────────────────────
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Install PlatformIO
+        run: pip install platformio
+
+      - name: Build tasmota32-bluetooth
+        run: platformio run -e tasmota32-bluetooth
+
+      # ── 11. 결과 확인 ─────────────────────────────────────────
+      - name: Check firmware size
+        run: |
+          BIN=build_output/firmware/tasmota32-bluetooth.bin
+          SIZE=$(stat -c%s "$BIN")
+          KB=$(( SIZE / 1024 ))
+          echo "Binary: ${SIZE} bytes (${KB} KB)"
+          if [ $KB -lt 1800 ] || [ $KB -gt 1900 ]; then
+            echo "경고: 예상 범위(1800~1900KB) 벗어남"
+          else
+            echo "크기 정상"
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tasmota32-zb-gw03-final
+          path: |
+            build_output/firmware/tasmota32-bluetooth.bin
+            build_output/firmware/tasmota32-bluetooth.factory.bin
+          retention-days: 14
