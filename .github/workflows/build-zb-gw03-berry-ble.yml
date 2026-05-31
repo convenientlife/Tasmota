@@ -56,13 +56,101 @@ jobs:
           echo "생성된 BLE/MI32 파일:"
           ls generate/ | grep -E "BLE|MI32"
 
-      # ── 4. [핵심] Berry MI32 - USE_BLE_ESP32 조건 제거 ────────
-      - name: Patch xdrv_52_3_berry_MI32.ino - enable BLE impl when USE_BLE_ESP32 defined
+      # ── 4. [핵심] Berry BLE 구현 추가 (USE_BLE_ESP32 케이스) ─────
+      # 원래 조건 유지 + USE_BLE_ESP32 활성 시 별도 구현 블록 추가
+      # (헤더 중복 포함 방지: extern 선언만 사용, xsns_62_esp32_mi.h 미포함)
+      - name: Patch xdrv_52_3_berry_MI32.ino - add BLE impl for USE_BLE_ESP32 case
         run: |
           F=tasmota/tasmota_xdrv_driver/xdrv_52_3_berry_MI32.ino
-          sed -i 's/#if defined(USE_MI_ESP32) && !defined(USE_BLE_ESP32)/#if defined(USE_MI_ESP32)/' "$F"
-          echo "패치 확인:"
-          grep -n "if defined(USE_MI_ESP32)" "$F"
+          python3 << 'PYEOF'
+          with open('tasmota/tasmota_xdrv_driver/xdrv_52_3_berry_MI32.ino', 'a') as f:
+              f.write("""
+#if defined(USE_MI_ESP32) && defined(USE_BLE_ESP32) && defined(USE_BERRY)
+// BLE+MI32 Berry implementations when USE_BLE_ESP32 is active.
+// Cannot include xsns_62_esp32_mi.h (already in xsns_62_esp32_mi_ble.ino).
+// Use only extern declarations to avoid duplicate definitions.
+extern "C" {
+  // MI32 internal function declarations
+  extern uint32_t MI32numberOfDevices();
+  extern char * MI32getDeviceName(uint32_t slot);
+  extern void MI32setBatteryForSlot(uint32_t slot, uint8_t value);
+  extern void MI32setHumidityForSlot(uint32_t slot, float value);
+  extern void MI32setTemperatureForSlot(uint32_t slot, float value);
+  extern uint8_t * MI32getDeviceMAC(uint32_t slot);
+  // BLE internal function declarations
+  extern bool MI32checkBLEinitialization();
+  extern void MI32BerryLoop();
+  extern void MI32setBerryAdvCB(void* function, uint8_t *buffer);
+  extern void MI32setBerryConnCB(void* function, uint8_t *buffer);
+  extern void MI32setBerryServerCB(void* function, uint8_t *buffer);
+  extern bool MI32runBerryConnection(uint8_t operation, bbool response, int32_t *arg1);
+  extern bool MI32setBerryCtxSvc(const char *Svc, bbool discoverAttributes);
+  extern bool MI32setBerryCtxChr(const char *Chr);
+  extern bool MI32setBerryCtxMAC(uint8_t *MAC, uint8_t type);
+  extern bool MI32addMACtoBlockList(uint8_t *MAC, uint8_t type);
+  extern bool MI32addMACtoWatchList(uint8_t *MAC, uint8_t type);
+
+  // be_MI32_* implementations
+  static struct { const char * data = nullptr; size_t size = 0; void* callback = nullptr; } be_MI32Widget2;
+  int be_MI32_devices(void) { return MI32numberOfDevices(); }
+  void be_MI32_set_bat(int slot, int bat_val){ MI32setBatteryForSlot(slot,bat_val); }
+  const char* be_MI32_get_name(int slot){ return MI32getDeviceName(slot); }
+  uint8_t *be_MI32_get_MAC(int32_t slot, size_t *size){
+    *size = 6; uint8_t *buf = MI32getDeviceMAC(slot); if(!buf)*size=0; return buf;
+  }
+  void be_MI32_set_hum(int slot, int hum_val){ MI32setHumidityForSlot(slot,hum_val); }
+  void be_MI32_set_temp(int slot, int temp_val){ MI32setTemperatureForSlot(slot,temp_val); }
+  bool be_MI32_widget(const char* sbuf, void* function){
+    if(function) be_MI32Widget2.callback=function;
+    if(be_MI32Widget2.size==0){be_MI32Widget2.data=sbuf;be_MI32Widget2.size=strlen(sbuf);return true;}
+    return false;
+  }
+
+  // be_BLE_* implementations
+  static bool be_BLE_check_MAC2(struct bvm *vm, size_t size){
+    if(size!=6){be_raisef(vm,"ble_error","BLE: wrong size of MAC");return false;} return true;
+  }
+  int be_BLE_init(bvm *vm){
+    if(MI32checkBLEinitialization()){be_return(vm);}
+    be_raise(vm,"ble_error","BLE: device not initialized"); be_return_nil(vm);
+  }
+  void be_BLE_loop(void){ MI32BerryLoop(); }
+  void be_BLE_reg_conn_cb(void* fn, uint8_t *buf){ MI32setBerryConnCB(fn,buf); }
+  void be_BLE_reg_server_cb(void* fn, uint8_t *buf){ MI32setBerryServerCB(fn,buf); }
+  void be_BLE_reg_adv_cb(void* fn, uint8_t *buf){
+    if(!fn){MI32setBerryAdvCB(NULL,NULL);}else if(buf){MI32setBerryAdvCB(fn,buf);}
+  }
+  void be_BLE_set_MAC(struct bvm *vm, uint8_t *buf, size_t size, uint8_t type){
+    if(!be_BLE_check_MAC2(vm,size))return;
+    if(MI32setBerryCtxMAC(buf,type?type:0))return; be_raisef(vm,"ble_error","BLE: could not set MAC");
+  }
+  void be_BLE_set_service(struct bvm *vm, const char *Svc, bbool da){
+    if(MI32setBerryCtxSvc(Svc,da?da:false))return; be_raisef(vm,"ble_error","BLE: could not set service");
+  }
+  void be_BLE_set_characteristic(struct bvm *vm, const char *Chr){
+    if(MI32setBerryCtxChr(Chr))return; be_raisef(vm,"ble_error","BLE: could not set characteristic");
+  }
+  void be_BLE_run(struct bvm *vm, uint8_t op, bbool resp, int32_t arg1){
+    int32_t a=arg1; int32_t *p=(be_top(vm)==3)?&a:nullptr;
+    if(MI32runBerryConnection(op,resp?resp:false,p))return; be_raisef(vm,"ble_error","BLE: could not run operation");
+  }
+  void be_BLE_adv_block(struct bvm *vm, uint8_t *buf, size_t size, uint8_t type){
+    if(!be_BLE_check_MAC2(vm,size))return;
+    if(MI32addMACtoBlockList(buf,type?type:0))return; be_raisef(vm,"ble_error","BLE: could not block MAC");
+  }
+  void be_BLE_adv_watch(struct bvm *vm, uint8_t *buf, size_t size, uint8_t type){
+    if(!be_BLE_check_MAC2(vm,size))return;
+    if(MI32addMACtoWatchList(buf,type?type:0))return; be_raisef(vm,"ble_error","BLE: could not add MAC to watch list");
+  }
+  int32_t be_BLE_info(struct bvm *vm){
+    be_newobject(vm,"map"); be_map_insert_str(vm,"role","observer"); be_pop(vm,1); be_return(vm);
+  }
+} // extern "C"
+#endif // USE_MI_ESP32 && USE_BLE_ESP32 && USE_BERRY
+""")
+          PYEOF
+          echo "패치 완료 - 마지막 10줄 확인:"
+          tail -10 "$F"
 
       # ── 5. Zigbee ZNP → EZSP 전환 ────────────────────────────
       - name: Switch Zigbee ZNP -> EZSP
