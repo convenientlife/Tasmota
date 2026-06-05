@@ -1,0 +1,31 @@
+name: Locate MI32 spam log strings
+
+on:
+  workflow_dispatch:
+
+jobs:
+  locate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: arendst/Tasmota
+          ref: v14.6.0
+
+      - name: Find both strings + context
+        run: |
+          echo "=== Payload length mismatch ==="
+          grep -rn "Payload length mismatch" tasmota/ 2>/dev/null || echo "(없음)"
+
+          echo ""
+          echo "=== Unknown MI pld type ==="
+          grep -rn "Unknown MI pld type" tasmota/ 2>/dev/null || echo "(없음)"
+
+          echo ""
+          echo "=== ±2줄 context ==="
+          grep -rn -B 2 -A 2 "Payload length mismatch\|Unknown MI pld type" tasmota/ 2>/dev/null
+
+          echo ""
+          echo "=== AddLog 호출인지 단일 라인인지 확인 ==="
+          grep -rn "AddLog.*Payload length mismatch" tasmota/ 2>/dev/null
+          grep -rn "AddLog.*Unknown MI pld type" tasmota/ 2>/dev/null
