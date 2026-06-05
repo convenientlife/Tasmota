@@ -14,14 +14,19 @@ jobs:
           repository: arendst/Tasmota
           ref: v14.6.0
 
-      - name: Mute "No Key found" (xsns_62_esp32_mi_ble.ino:1262)
+      - name: Mute MI32 noisy logs (NoKey + Payload mismatch + Unknown pld type)
         run: |
           F=tasmota/tasmota_xsns_sensor/xsns_62_esp32_mi_ble.ino
           echo "=== 패치 전 ==="
-          grep -n "No Key found" "$F"
+          grep -nE "No Key found|Payload length mismatch|Unknown MI pld type" "$F"
+
           sed -i '/AddLog.*No Key found/s|^|// |' "$F"
-          echo "=== 패치 후 (// 로 시작해야 정상) ==="
-          grep -n "No Key found" "$F"
+          sed -i '/AddLog.*Payload length mismatch/s|^|// |' "$F"
+          sed -i '/AddLog.*Unknown MI pld type/s|^|// |' "$F"
+
+          echo ""
+          echo "=== 패치 후 (모두 // 로 시작해야 정상) ==="
+          grep -nE "No Key found|Payload length mismatch|Unknown MI pld type" "$F"
 
       - name: Patch xdrv_79 - /ble handler before BLEInitState early-return
         run: |
